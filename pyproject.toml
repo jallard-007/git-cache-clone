@@ -6,9 +6,21 @@ authors = [
     {name = "jallard",email = "justinallard20@gmail.com"}
 ]
 readme = "README.md"
+license = "MIT"
+
 requires-python = ">=3.6"
 dependencies = [
 ]
+
+keywords = ["git"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
+[project.urls]
+Homepage = "https://github.com/jallard-007/git-cache-clone"
 
 [project.scripts]
 git-cache-clone = "git_cache_clone.cli:main"
