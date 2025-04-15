@@ -23,7 +23,7 @@ classifiers = [
 Homepage = "https://github.com/jallard-007/git-cache-clone"
 
 [project.scripts]
-git-cache-clone = "git_cache_clone.cli:main"
+git-cache-clone = "git_cache_clone.main:main"
 
 [tool.poetry]
 packages = [{include = "git_cache_clone", from = "src"}]
@@ -34,3 +34,11 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.isort]
 profile = "black"
+
+[tool.flake8]
+max-complexity = 10
+max-line-length = 100
+exclude = [
+    ".git",
+    "__pycache__"
+]
