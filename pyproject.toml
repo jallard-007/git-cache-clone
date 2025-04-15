@@ -1,0 +1,21 @@
+[project]
+name = "git-cache-clone"
+version = "0.1.0"
+description="Git clone wrapper with caching and fast reference clones"
+authors = [
+    {name = "jallard",email = "justinallard20@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.6"
+dependencies = [
+]
+
+[project.scripts]
+git-cache-clone = "git_cache_clone.cli:main"
+
+[tool.poetry]
+packages = [{include = "git_cache_clone", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
