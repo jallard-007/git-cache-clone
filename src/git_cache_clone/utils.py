@@ -2,32 +2,34 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Dict, Optional
 from urllib.parse import urlparse, urlunparse
 
 from git_cache_clone.definitions import (
+    CACHE_MODES,
     CACHE_USED_FILE_NAME,
     DEFAULT_CACHE_BASE,
+    DEFAULT_CACHE_MODE,
     GIT_CONFIG_CACHE_BASE_VAR_NAME,
     GIT_CONFIG_CACHE_MODE_VAR_NAME,
     GIT_CONFIG_NO_LOCK_VAR_NAME,
-    CACHE_MODES,
-    DEFAULT_CACHE_MODE,
 )
 
 # Module-level cache
-_git_config_cache = None
+_git_config_cache: Optional[Dict[str, str]] = None
+
+
 def get_git_config_value(key: str) -> Optional[str]:
     global _git_config_cache
-    
+
     if _git_config_cache is None:
         # Run git config --list and parse into a dictionary
         try:
-            output = subprocess.check_output(['git', 'config', '--list'], text=True)
+            output = subprocess.check_output(["git", "config", "--list"], text=True)
             _git_config_cache = {}
-            for line in output.strip().split('\n'):
-                if '=' in line:
-                    k, v = line.split('=', 1)
+            for line in output.strip().split("\n"):
+                if "=" in line:
+                    k, v = line.split("=", 1)
                     _git_config_cache[k.strip()] = v.strip()
         except subprocess.CalledProcessError:
             _git_config_cache = {}
@@ -44,7 +46,7 @@ def get_cache_base_from_git_config():
     return DEFAULT_CACHE_BASE
 
 
-def get_cache_mode_from_git_config() -> Literal["bare", "mirror"]:
+def get_cache_mode_from_git_config() -> str:
     cache_mode = get_git_config_value(GIT_CONFIG_CACHE_MODE_VAR_NAME)
     if cache_mode:
         cache_mode = cache_mode.lower()

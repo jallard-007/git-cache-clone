@@ -5,7 +5,10 @@ from git_cache_clone.definitions import (
     DEFAULT_CACHE_BASE,
     GIT_CONFIG_CACHE_BASE_VAR_NAME,
 )
-from git_cache_clone.utils import get_cache_base_from_git_config, get_no_lock_from_git_config
+from git_cache_clone.utils import (
+    get_cache_base_from_git_config,
+    get_no_lock_from_git_config,
+)
 
 
 class ProgramArguments(argparse.Namespace):

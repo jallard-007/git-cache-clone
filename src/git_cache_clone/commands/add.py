@@ -89,10 +89,12 @@ def add_cache_options_group(parser: argparse.ArgumentParser):
         help="clone mode for the cache. default is bare",
     )
     cache_options_group.add_argument(
-        "-r", "--refresh",
+        "-r",
+        "--refresh",
         action="store_true",
         help="if the cached repo already exists, sync with remote",
     )
+
 
 def create_cache_subparser(subparsers) -> None:
     parser = subparsers.add_parser(
