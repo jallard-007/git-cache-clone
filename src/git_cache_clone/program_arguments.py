@@ -11,7 +11,7 @@ from git_cache_clone.utils import (
 )
 
 
-class ProgramArguments(argparse.Namespace):
+class CLIArgumentNamespace(argparse.Namespace):
     # all options
     cache_base: str
     no_lock: bool
@@ -34,7 +34,7 @@ class ProgramArguments(argparse.Namespace):
     unused_for: Optional[int]
 
     # arg parse call back
-    func: Callable[[argparse.ArgumentParser, "ProgramArguments", List[str]], int]
+    func: Callable[[argparse.ArgumentParser, "CLIArgumentNamespace", List[str]], int]
 
 
 def add_default_options_group(parser: argparse.ArgumentParser):

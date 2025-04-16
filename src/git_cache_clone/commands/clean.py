@@ -14,7 +14,7 @@ from git_cache_clone.definitions import (
 )
 from git_cache_clone.file_lock import get_lock_obj
 from git_cache_clone.program_arguments import (
-    ProgramArguments,
+    CLIArgumentNamespace,
     add_default_options_group,
 )
 from git_cache_clone.utils import get_cache_dir
@@ -92,6 +92,36 @@ def _remove_cache_dir(cache_dir: Path) -> bool:
         return True
 
 
+def check_arguments(
+    clean_all: bool, unused_for: Optional[int], uri: Optional[str]
+) -> None:
+    if unused_for is not None and unused_for < 0:
+        raise ValueError("unused-for must be positive")
+    if not clean_all and not uri:
+        raise ValueError("Missing uri")
+
+
+def main(
+    cache_base: Path,
+    clean_all: bool = False,
+    uri: Optional[str] = None,
+    timeout_sec: int = -1,
+    no_lock: bool = False,
+    unused_for: Optional[int] = None,
+) -> int:
+    check_arguments(clean_all, unused_for, uri)
+
+    if clean_all:
+        if clean_cache_all(cache_base, timeout_sec, no_lock, unused_for):
+            return 0
+        return 1
+
+    if uri:
+        if clean_cache_uri(cache_base, uri, timeout_sec, no_lock, unused_for):
+            return 0
+    return 1
+
+
 def add_clean_options_group(parser: argparse.ArgumentParser):
     clean_options_group = parser.add_argument_group("Clean options")
     clean_options_group.add_argument(
@@ -114,35 +144,22 @@ def create_clean_subparser(subparsers) -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.set_defaults(func=main)
+    parser.set_defaults(func=cli_main)
     add_default_options_group(parser)
     add_clean_options_group(parser)
 
 
-def main(
-    parser: argparse.ArgumentParser, args: ProgramArguments, extra_args: List[str]
+def cli_main(
+    parser: argparse.ArgumentParser, args: CLIArgumentNamespace, extra_args: List[str]
 ) -> int:
     if extra_args:
         parser.error(f"Unknown option '{extra_args[0]}'")
-
-    if args.unused_for is not None and args.unused_for < 0:
-        parser.error("unused-for must be positive")
+    try:
+        check_arguments(args.all, args.unused_for, args.uri)
+    except ValueError as ex:
+        parser.error(str(ex))
 
     cache_base = Path(args.cache_base)
-    if args.all:
-        return (
-            0
-            if clean_cache_all(cache_base, args.timeout, args.no_lock, args.unused_for)
-            else 1
-        )
-
-    if not args.uri:
-        parser.error("Missing uri")
-
-    return (
-        0
-        if clean_cache_uri(
-            cache_base, args.uri, args.timeout, args.no_lock, args.unused_for
-        )
-        else 1
+    return main(
+        cache_base, args.all, args.uri, args.timeout, args.no_lock, args.unused_for
     )

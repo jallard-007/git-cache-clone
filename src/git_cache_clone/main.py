@@ -13,7 +13,7 @@ import git_cache_clone.commands.add as add
 import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
-from git_cache_clone.program_arguments import ProgramArguments
+from git_cache_clone.program_arguments import CLIArgumentNamespace
 
 """
 Some terminology:
@@ -49,17 +49,21 @@ class DefaultSubcommandArgParse(argparse.ArgumentParser):
         )
 
 
-def main() -> int:
-    parser, known_args, extra_args = parse_args(sys.argv[1:])
+def main(argv: Optional[List[str]] = None) -> int:
+    parser, known_args, extra_args = parse_args(
+        argv if argv is not None else sys.argv[1:]
+    )
     return known_args.func(parser, known_args, extra_args)
 
 
 def parse_args(
     argv: List[str],
-) -> Tuple[argparse.ArgumentParser, ProgramArguments, List[str]]:
+) -> Tuple[argparse.ArgumentParser, CLIArgumentNamespace, List[str]]:
     parser = create_parser()
     # Parse known and unknown args
-    known_args, extra_args = parser.parse_known_args(argv, namespace=ProgramArguments())
+    known_args, extra_args = parser.parse_known_args(
+        argv, namespace=CLIArgumentNamespace()
+    )
     # unknown_args will contain all the normal git-clone options
     return parser, known_args, extra_args
 

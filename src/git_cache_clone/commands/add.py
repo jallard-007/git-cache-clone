@@ -13,7 +13,7 @@ from git_cache_clone.definitions import (
 )
 from git_cache_clone.file_lock import get_lock_obj
 from git_cache_clone.program_arguments import (
-    ProgramArguments,
+    CLIArgumentNamespace,
     add_default_options_group,
 )
 from git_cache_clone.utils import get_cache_dir, get_cache_mode_from_git_config
@@ -80,6 +80,27 @@ def add_to_cache(
     return cache_dir
 
 
+def main(
+    cache_base: Path,
+    uri: str,
+    cache_mode: Literal["bare", "mirror"] = "bare",
+    timeout_sec: int = -1,
+    no_lock: bool = False,
+    should_refresh: bool = False,
+) -> int:
+    if add_to_cache(
+        cache_base=cache_base,
+        uri=uri,
+        cache_mode=cache_mode,
+        timeout_sec=timeout_sec,
+        no_lock=no_lock,
+        should_refresh=should_refresh,
+    ):
+        return 0
+
+    return 1
+
+
 def add_cache_options_group(parser: argparse.ArgumentParser):
     cache_options_group = parser.add_argument_group("Add options")
     cache_options_group.add_argument(
@@ -103,13 +124,13 @@ def create_cache_subparser(subparsers) -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.set_defaults(func=main)
+    parser.set_defaults(func=cli_main)
     add_default_options_group(parser)
     add_cache_options_group(parser)
 
 
-def main(
-    parser: argparse.ArgumentParser, args: ProgramArguments, extra_args: List[str]
+def cli_main(
+    parser: argparse.ArgumentParser, args: CLIArgumentNamespace, extra_args: List[str]
 ) -> int:
     if extra_args:
         parser.error(f"Unknown option '{extra_args[0]}'")
@@ -118,13 +139,11 @@ def main(
         parser.error("Missing uri")
 
     cache_base = Path(args.cache_base)
-    if add_to_cache(
+    return main(
         cache_base=cache_base,
         uri=args.uri,
         cache_mode=args.cache_mode,
         timeout_sec=args.timeout,
         no_lock=args.no_lock,
-    ):
-        return 0
-
-    return 1
+        should_refresh=args.refresh,
+    )
