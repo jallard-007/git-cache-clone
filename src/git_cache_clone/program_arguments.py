@@ -5,7 +5,7 @@ from git_cache_clone.definitions import (
     DEFAULT_CACHE_BASE,
     GIT_CONFIG_CACHE_BASE_VAR_NAME,
 )
-from git_cache_clone.utils import get_cache_base_from_git_config
+from git_cache_clone.utils import get_cache_base_from_git_config, get_no_lock_from_git_config
 
 
 class ProgramArguments(argparse.Namespace):
@@ -27,6 +27,9 @@ class ProgramArguments(argparse.Namespace):
     # refresh and clean options
     all: bool
 
+    # clean options
+    unused_for: Optional[int]
+
     # arg parse call back
     func: Callable[[argparse.ArgumentParser, "ProgramArguments", List[str]], int]
 
@@ -45,6 +48,7 @@ def add_default_options_group(parser: argparse.ArgumentParser):
     default_options_group.add_argument(
         "--no-lock",
         action="store_true",
+        default=get_no_lock_from_git_config(),
         help=(
             "do not use file locks."
             " in environments where concurrent operations can happen,"

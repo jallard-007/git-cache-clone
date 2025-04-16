@@ -12,14 +12,15 @@ from git_cache_clone.commands.add import (
     get_cache_dir,
 )
 from git_cache_clone.definitions import (
+    CACHE_LOCK_FILE_NAME,
     CLONE_DIR_NAME,
-    LOCK_FILE_NAME,
 )
 from git_cache_clone.file_lock import get_lock_obj
 from git_cache_clone.program_arguments import (
     ProgramArguments,
     add_default_options_group,
 )
+from git_cache_clone.utils import mark_cache_used
 
 
 def clone(uri: str, extra_args: List[str], dest: Optional[str] = None) -> int:
@@ -55,11 +56,12 @@ def cache_clone(
 
     # shared lock for read action
     lock = get_lock_obj(
-        cache_dir / LOCK_FILE_NAME if not no_lock else None,
+        cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
         shared=True,
         timeout_sec=timeout_sec,
     )
     with lock:
+        mark_cache_used(cache_dir)
         res = subprocess.run(clone_cmd)
 
     return res.returncode

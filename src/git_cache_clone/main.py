@@ -1,10 +1,9 @@
 """git clone with caching
 
-To see usage info for a specific command, run git cache <subcommand> [-h | --help]
-
-By default, runs the 'clone' subcommand, meaning it can act as a drop in replacement for clone.
+To see usage info for a specific subcommand, run git cache <subcommand> [-h | --help]
 
 """
+
 
 import argparse
 import sys
@@ -15,6 +14,14 @@ import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
 from git_cache_clone.program_arguments import ProgramArguments
+
+"""
+Some terminology:
+
+cache base - directory where all cached repos go
+cache dir - directory where a specific repo is cached (cache base + normalized and flattened uri)
+clone dir - directory in a cache dir where the repo is cloned (cache dir + CLONE_DIR_NAME)
+"""
 
 
 class DefaultSubcommandArgParse(argparse.ArgumentParser):
@@ -60,7 +67,7 @@ def parse_args(
 def create_parser() -> argparse.ArgumentParser:
     parser = DefaultSubcommandArgParse(
         description=__doc__,
-        prog="git-cache",
+        prog="git cache",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(help="subcommand help")

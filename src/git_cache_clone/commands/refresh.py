@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from git_cache_clone.definitions import CLONE_DIR_NAME, LOCK_FILE_NAME
+from git_cache_clone.definitions import CACHE_LOCK_FILE_NAME, CLONE_DIR_NAME
 from git_cache_clone.file_lock import get_lock_obj
 from git_cache_clone.program_arguments import (
     ProgramArguments,
@@ -44,7 +44,7 @@ def refresh_cache_at_dir(
         return 1
 
     lock = get_lock_obj(
-        cache_dir / LOCK_FILE_NAME if not no_lock else None,
+        cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
         shared=False,
         timeout_sec=timeout_sec,
     )

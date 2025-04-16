@@ -55,10 +55,8 @@ def get_lock_obj(
 @contextmanager
 def timeout(seconds: int):
     if seconds < 0:
-        try:
-            yield
-        finally:
-            return
+        yield
+        return
 
     def timeout_handler(signum, frame):
         raise InterruptedError

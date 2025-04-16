@@ -8,15 +8,15 @@ from typing import List, Literal, Optional
 
 from git_cache_clone.commands.refresh import refresh_cache_at_dir
 from git_cache_clone.definitions import (
+    CACHE_LOCK_FILE_NAME,
     CLONE_DIR_NAME,
-    LOCK_FILE_NAME,
 )
 from git_cache_clone.file_lock import get_lock_obj
 from git_cache_clone.program_arguments import (
     ProgramArguments,
     add_default_options_group,
 )
-from git_cache_clone.utils import get_cache_dir
+from git_cache_clone.utils import get_cache_dir, get_cache_mode_from_git_config
 
 
 def _add(
@@ -27,7 +27,7 @@ def _add(
     no_lock: bool = False,
 ) -> bool:
     lock = get_lock_obj(
-        cache_dir / LOCK_FILE_NAME if not no_lock else None,
+        cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
         shared=False,
         timeout_sec=timeout_sec,
     )
@@ -85,15 +85,14 @@ def add_cache_options_group(parser: argparse.ArgumentParser):
     cache_options_group.add_argument(
         "--cache-mode",
         choices=["bare", "mirror"],
-        default="bare",
+        default=get_cache_mode_from_git_config(),
         help="clone mode for the cache. default is bare",
     )
     cache_options_group.add_argument(
-        "--refresh",
+        "-r", "--refresh",
         action="store_true",
         help="if the cached repo already exists, sync with remote",
     )
-
 
 def create_cache_subparser(subparsers) -> None:
     parser = subparsers.add_parser(
