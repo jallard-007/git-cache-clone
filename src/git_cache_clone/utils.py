@@ -10,7 +10,7 @@ from git_cache_clone.definitions import (
 
 
 def get_git_config(key: str) -> Optional[str]:
-    """Try to get a git config value, searching both local and global configs."""
+    """Try to get a git config value, searching both local and global configs"""
     try:
         value = subprocess.check_output(
             ["git", "config", "--get", key], text=True
@@ -21,7 +21,7 @@ def get_git_config(key: str) -> Optional[str]:
 
 
 def get_cache_base_from_git_config():
-    """Determine the cache base directory to use."""
+    """Determine the cache base directory to use"""
     cache_base = get_git_config(GIT_CONFIG_CACHE_BASE_VAR_NAME)
     if cache_base:
         return Path(cache_base)
@@ -29,6 +29,12 @@ def get_cache_base_from_git_config():
     return DEFAULT_CACHE_BASE
 
 
-def hash_url(url: str) -> str:
-    """Hash git URL."""
-    return hashlib.sha1(url.encode(), usedforsecurity=False).hexdigest()
+def hash_uri(uri: str) -> str:
+    """Hash  URI"""
+    return hashlib.sha1(uri.encode(), usedforsecurity=False).hexdigest()
+
+
+def get_cache_dir(cache_base: Path, uri: str) -> Path:
+    """Returns the dir where the URI would be cached. This does not mean it is cached"""
+    repo_hash = hash_uri(uri)
+    return cache_base / repo_hash

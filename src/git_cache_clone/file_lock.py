@@ -8,14 +8,20 @@ from typing import Optional, Union
 
 
 class FileLock:
-    def __init__(self, fd: int):
-        self.fd: Optional[int] = fd
+    def __init__(self, fd: Optional[int], shared: bool = False, timeout_sec: int = -1):
+        self.fd = fd
+        self.shared = shared
+        self.timeout_sec = timeout_sec
 
     def __enter__(self):
-        pass
+        self.acquire()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.release()
+
+    def acquire(self) -> None:
+        if self.fd is not None:
+            _acquire_lock(self.fd, shared=self.shared, timeout_sec=self.timeout_sec)
 
     def release(self) -> None:
         if self.fd is not None:
@@ -23,8 +29,8 @@ class FileLock:
             self.fd = None
 
 
-def acquire_lock_fd(fd: int, shared: bool = False, timeout_sec: int = -1) -> FileLock:
-    """Create and lock a file inside lock_dir."""
+def _acquire_lock(fd: int, shared: bool = False, timeout_sec: int = -1) -> None:
+    """Create and lock a file inside lock_dir"""
     try:
         import fcntl
     except ImportError:
@@ -34,18 +40,20 @@ def acquire_lock_fd(fd: int, shared: bool = False, timeout_sec: int = -1) -> Fil
         with timeout(timeout_sec):
             fcntl.lockf(fd, lock_type)
 
-    return FileLock(fd)
 
-
-def acquire_lock(
-    file: Union[str, os.PathLike[str]], shared: bool = False, timeout_sec: int = -1
+def get_lock_obj(
+    file: Optional[Union[str, os.PathLike[str], int]],
+    shared: bool = False,
+    timeout_sec: int = -1,
 ) -> FileLock:
-    fd = os.open(file, os.O_CREAT | os.O_RDWR)
-    return acquire_lock_fd(fd, shared=shared, timeout_sec=timeout_sec)
+    if file is not None and not isinstance(file, int):
+        file = os.open(file, os.O_CREAT | os.O_RDWR)
+
+    return FileLock(file, shared, timeout_sec)
 
 
 @contextmanager
-def timeout(seconds):
+def timeout(seconds: int):
     if seconds < 0:
         try:
             yield
