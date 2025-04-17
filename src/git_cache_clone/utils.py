@@ -1,6 +1,8 @@
 import re
+import signal
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import urlparse, urlunparse
@@ -20,6 +22,14 @@ _git_config_cache: Optional[Dict[str, str]] = None
 
 
 def get_git_config_value(key: str) -> Optional[str]:
+    """Gets the value of a Git configuration key.
+
+    Args:
+        key: The Git configuration key to retrieve.
+
+    Returns:
+        The value of the Git configuration key, or None if not found.
+    """
     global _git_config_cache
 
     if _git_config_cache is None:
@@ -38,7 +48,11 @@ def get_git_config_value(key: str) -> Optional[str]:
 
 
 def get_cache_base_from_git_config():
-    """Determine the cache base directory to use"""
+    """Determines the cache base directory to use.
+
+    Returns:
+        The cache base directory as a Path object.
+    """
     cache_base = get_git_config_value(GIT_CONFIG_CACHE_BASE_VAR_NAME)
     if cache_base:
         return Path(cache_base)
@@ -47,6 +61,11 @@ def get_cache_base_from_git_config():
 
 
 def get_cache_mode_from_git_config() -> str:
+    """Determines the cache mode to use from Git configuration.
+
+    Returns:
+        The cache mode as a string.
+    """
     cache_mode = get_git_config_value(GIT_CONFIG_CACHE_MODE_VAR_NAME)
     if cache_mode:
         cache_mode = cache_mode.lower()
@@ -65,6 +84,11 @@ def get_cache_mode_from_git_config() -> str:
 
 
 def get_no_lock_from_git_config() -> bool:
+    """Determines whether locking is disabled from Git configuration.
+
+    Returns:
+        True if locking is disabled, False otherwise.
+    """
     no_lock = get_git_config_value(GIT_CONFIG_NO_LOCK_VAR_NAME)
     if no_lock is None:
         return False
@@ -72,13 +96,18 @@ def get_no_lock_from_git_config() -> bool:
 
 
 def normalize_git_uri(uri: str) -> str:
-    """
-    Normalize a Git repository URI to a canonical HTTPS form for consistent cache key generation.
+    """Normalizes a Git repository URI to a canonical HTTPS form for consistent cache key generation.
+
+    Args:
+        uri: The Git repository URI to normalize.
+
+    Returns:
+        The normalized URI as a string.
 
     Examples:
-        git@github.com:user/repo.git       → https://github.com/user/repo
-        https://github.com/User/Repo.git   → https://github.com/user/repo
-        git://github.com/user/repo.git     → https://github.com/user/repo
+        git@github.com:user/repo.git → https://github.com/user/repo
+        https://github.com/User/Repo.git → https://github.com/user/repo
+        git://github.com/user/repo.git → https://github.com/user/repo
     """
     uri = uri.strip()
 
@@ -113,8 +142,13 @@ def normalize_git_uri(uri: str) -> str:
 
 
 def flatten_uri(uri: str) -> str:
-    """
-    Convert a normalized Git URL to a filesystem directory name.
+    """Converts a normalized Git URL to a filesystem directory name.
+
+    Args:
+        uri: The normalized Git URL.
+
+    Returns:
+        The flattened directory name.
 
     Example:
         github.com/user/repo → github.com_user_repo
@@ -124,13 +158,57 @@ def flatten_uri(uri: str) -> str:
 
 
 def get_cache_dir(cache_base: Path, uri: str) -> Path:
-    """Returns the dir where the URI would be cached. This does not mean it is cached"""
+    """Returns the directory where the URI would be cached.
+
+    Args:
+        cache_base: The base directory for the cache.
+        uri: The URI of the repository.
+
+    Returns:
+        The path to the cache directory.
+    """
     normalized = normalize_git_uri(uri)
     flattened = flatten_uri(normalized)
     return cache_base / flattened
 
 
 def mark_cache_used(cache_dir: Path):
-    """Should be used while holding the lock"""
+    """Marks a cache directory as used.
+
+    Args:
+        cache_dir: The cache directory to mark as used.
+    """
     marker = cache_dir / CACHE_USED_FILE_NAME
     marker.touch(exist_ok=True)
+
+
+@contextmanager
+def timeout_guard(seconds: int):
+    """Timeout manager that raises a TimeoutError after a specified duration.
+
+    If the specified duration is less than or equal to 0, this function does nothing.
+
+    Args:
+        seconds: The time in seconds to wait before raising a TimeoutError.
+
+    Yields:
+        None.
+
+    Raises:
+        TimeoutError: If the timeout duration is exceeded.
+    """
+    if seconds <= 0:
+        yield
+        return
+
+    def timeout_handler(signum, frame):
+        raise TimeoutError
+
+    original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+
+    try:
+        signal.alarm(seconds)
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, original_handler)

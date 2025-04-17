@@ -15,7 +15,7 @@ from git_cache_clone.definitions import (
     CACHE_LOCK_FILE_NAME,
     CLONE_DIR_NAME,
 )
-from git_cache_clone.file_lock import get_lock_obj
+from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     add_default_options_group,
@@ -23,13 +23,22 @@ from git_cache_clone.program_arguments import (
 from git_cache_clone.utils import mark_cache_used
 
 
-def clone(uri: str, git_clone_args: List[str], dest: Optional[str] = None) -> int:
-    # does a normal git clone. used when cache clone fails
+def clone(uri: str, git_clone_args: List[str], dest: Optional[str] = None) -> bool:
+    """Performs a normal git clone.
+
+    Args:
+        uri: The URI of the repository to clone.
+        git_clone_args: Additional arguments to pass to the git clone command.
+        dest: The destination directory for the clone. Defaults to None.
+
+    Returns:
+        True if the clone was successful, False otherwise.
+    """
     fallback_cmd = ["git", "clone"] + git_clone_args + [uri]
     if dest:
         fallback_cmd.append(dest)
     res = subprocess.run(fallback_cmd)
-    return res.returncode
+    return res.returncode == 0
 
 
 def cache_clone(
@@ -37,9 +46,22 @@ def cache_clone(
     git_clone_args: List[str],
     uri: str,
     dest: Optional[str] = None,
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
-) -> int:
+) -> bool:
+    """Performs a cache-based git clone.
+
+    Args:
+        cache_dir: The directory where the cache is stored.
+        git_clone_args: Additional arguments to pass to the git clone command.
+        uri: The URI of the repository to clone.
+        dest: The destination directory for the clone. Defaults to None.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+
+    Returns:
+        True if the clone was successful, False otherwise.
+    """
     clone_cmd = (
         [
             "git",
@@ -55,16 +77,16 @@ def cache_clone(
         clone_cmd.append(dest)
 
     # shared lock for read action
-    lock = get_lock_obj(
+    lock = FileLock(
         cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
         shared=True,
-        timeout_sec=timeout_sec,
+        wait_timeout=wait_timeout,
     )
     with lock:
         mark_cache_used(cache_dir)
         res = subprocess.run(clone_cmd)
 
-    return res.returncode
+    return res.returncode == 0
 
 
 def main(
@@ -72,13 +94,30 @@ def main(
     uri: str,
     dest: Optional[str] = None,
     cache_mode: Literal["bare", "mirror"] = "bare",
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     clone_only: bool = False,
     no_retry: bool = False,
     should_refresh: bool = False,
     git_clone_args: Optional[List[str]] = None,
-) -> int:
+) -> bool:
+    """Main function to clone a repository using the cache.
+
+    Args:
+        cache_base: The base directory for the cache.
+        uri: The URI of the repository to clone.
+        dest: The destination directory for the clone. Defaults to None.
+        cache_mode: The mode to use for cloning the repository. Defaults to "bare".
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+        clone_only: Whether to skip adding the repository to the cache. Defaults to False.
+        no_retry: Whether to skip retrying with a normal clone if the cache clone fails. Defaults to False.
+        should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
+        git_clone_args: Additional arguments to pass to the git clone command. Defaults to None.
+
+    Returns:
+        True if the clone was successful, False otherwise.
+    """
     if git_clone_args is None:
         git_clone_args = []
 
@@ -89,7 +128,7 @@ def main(
                 cache_base=cache_base,
                 uri=uri,
                 cache_mode=cache_mode,
-                timeout_sec=timeout_sec,
+                wait_timeout=wait_timeout,
                 no_lock=no_lock,
                 should_refresh=should_refresh,
             )
@@ -108,7 +147,7 @@ def main(
             return clone(uri=uri, git_clone_args=git_clone_args, dest=dest)
 
         print("Cache clone failed!", file=sys.stderr)
-        return 1
+        return False
 
     # we have a cache_dir, try cache clone
     try:
@@ -117,14 +156,14 @@ def main(
             git_clone_args=git_clone_args,
             uri=uri,
             dest=dest,
-            timeout_sec=timeout_sec,
+            wait_timeout=wait_timeout,
             no_lock=no_lock,
         )
     except InterruptedError:
         print("Hit timeout while waiting for lock!", file=sys.stderr)
-        cache_clone_res = 1
+        cache_clone_res = False
 
-    if cache_clone_res != 0:
+    if not cache_clone_res:
         if not no_retry:
             print("Reference clone failed. Trying normal clone", file=sys.stderr)
             return clone(uri=uri, git_clone_args=git_clone_args, dest=dest)
@@ -135,6 +174,11 @@ def main(
 
 
 def add_clone_options_group(parser: argparse.ArgumentParser):
+    """Adds clone-related options to the argument parser.
+
+    Args:
+        parser: The argument parser to add options to.
+    """
     clone_options_group = parser.add_argument_group("Clone options")
     clone_options_group.add_argument(
         "--clone-only",
@@ -150,6 +194,11 @@ def add_clone_options_group(parser: argparse.ArgumentParser):
 
 
 def create_clone_subparser(subparsers) -> None:
+    """Creates a subparser for the 'clone' command.
+
+    Args:
+        subparsers: The subparsers object to add the 'clone' command to.
+    """
     parser = subparsers.add_parser(
         "clone",
         help="Clone using cache",
@@ -165,6 +214,16 @@ def create_clone_subparser(subparsers) -> None:
 def cli_main(
     parser: argparse.ArgumentParser, args: CLIArgumentNamespace, extra_args: List[str]
 ) -> int:
+    """CLI entry point for the 'clone' command.
+
+    Args:
+        parser: The argument parser.
+        args: Parsed command-line arguments.
+        extra_args: Additional arguments passed to the command.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
     cache_base = Path(args.cache_base)
     if not args.uri:
         parser.error("Missing uri")
@@ -174,7 +233,7 @@ def cli_main(
         uri=args.uri,
         dest=args.dest,
         cache_mode=args.cache_mode,
-        timeout_sec=args.timeout,
+        wait_timeout=args.wait_timeout,
         no_lock=args.no_lock,
         clone_only=args.clone_only,
         no_retry=args.no_retry,

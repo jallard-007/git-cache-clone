@@ -15,7 +15,7 @@ class CLIArgumentNamespace(argparse.Namespace):
     # all options
     cache_base: str
     no_lock: bool
-    timeout: int
+    wait_timeout: int
     uri: Optional[str]
 
     # clone options

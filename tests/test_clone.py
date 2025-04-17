@@ -15,6 +15,8 @@ def test_git_cache_clone_creates_cache():
         repo_path = create_empty_git_repo(tmpdir_p)
         result = clone_main(cache_dir, str(repo_path), dest=str(target_dir))
 
-        assert result == 0
+        assert result == True
         assert target_dir.exists()
         assert any(cache_dir.iterdir()), "Cache directory should not be empty"
+
+#TODO : add tests

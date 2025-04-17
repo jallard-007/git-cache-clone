@@ -12,7 +12,7 @@ from git_cache_clone.definitions import (
     CACHE_USED_FILE_NAME,
     CLONE_DIR_NAME,
 )
-from git_cache_clone.file_lock import get_lock_obj
+from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     add_default_options_group,
@@ -22,14 +22,25 @@ from git_cache_clone.utils import get_cache_dir
 
 def clean_cache_all(
     cache_base: Path,
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     unused_in: Optional[int] = None,
 ) -> bool:
+    """Cleans all cached repositories.
+
+    Args:
+        cache_base: The base directory for the cache.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+        unused_in: Only clean caches unused for this many days. Defaults to None.
+
+    Returns:
+        True if all caches were cleaned successfully, False otherwise.
+    """
     paths = cache_base.glob("*/")
     res = True
     for path in paths:
-        if not _clean_cache_dir(path, timeout_sec, no_lock, unused_in):
+        if not _clean_cache_dir(path, wait_timeout, no_lock, unused_in):
             res = False
 
     return res
@@ -38,15 +49,36 @@ def clean_cache_all(
 def clean_cache_uri(
     cache_base: Path,
     uri: str,
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     unused_in: Optional[int] = None,
 ) -> bool:
+    """Cleans a specific cached repository by its URI.
+
+    Args:
+        cache_base: The base directory for the cache.
+        uri: The URI of the repository to clean.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+        unused_in: Only clean caches unused for this many days. Defaults to None.
+
+    Returns:
+        True if the cache was cleaned successfully, False otherwise.
+    """
     cache_dir = get_cache_dir(cache_base, uri)
-    return _clean_cache_dir(cache_dir, timeout_sec, no_lock, unused_in)
+    return _clean_cache_dir(cache_dir, wait_timeout, no_lock, unused_in)
 
 
 def was_used_within(cache_dir: Path, days: int) -> bool:
+    """Checks if a cache directory was used within a certain number of days.
+
+    Args:
+        cache_dir: The cache directory to check.
+        days: The number of days to check for usage.
+
+    Returns:
+        True if the cache was used within the specified number of days, False otherwise.
+    """
     marker = cache_dir / CACHE_USED_FILE_NAME
     try:
         last_used = marker.stat().st_mtime
@@ -57,14 +89,14 @@ def was_used_within(cache_dir: Path, days: int) -> bool:
 
 def _clean_cache_dir(
     cache_dir: Path,
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     unused_in: Optional[int] = None,
 ) -> bool:
-    lock = get_lock_obj(
+    lock = FileLock(
         None if no_lock else cache_dir / CACHE_LOCK_FILE_NAME,
         shared=False,
-        timeout_sec=timeout_sec,
+        wait_timeout=wait_timeout,
     )
     with lock:
         if unused_in is None or not was_used_within(cache_dir, unused_in):
@@ -74,6 +106,14 @@ def _clean_cache_dir(
 
 
 def _remove_cache_dir(cache_dir: Path) -> bool:
+    """Removes a cache directory.
+
+    Args:
+        cache_dir: The cache directory to remove.
+
+    Returns:
+        True if the cache directory was removed successfully, False otherwise.
+    """
     try:
         # This might be unnecessary to do in two calls but if the
         # lock file is deleted first and remade by another process, then in theory
@@ -95,6 +135,16 @@ def _remove_cache_dir(cache_dir: Path) -> bool:
 def check_arguments(
     clean_all: bool, unused_for: Optional[int], uri: Optional[str]
 ) -> None:
+    """Validates the arguments for cleaning the cache.
+
+    Args:
+        clean_all: Whether to clean all caches.
+        unused_for: Only clean caches unused for this many days.
+        uri: The URI of the repository to clean.
+
+    Raises:
+        ValueError: If the arguments are invalid.
+    """
     if unused_for is not None and unused_for < 0:
         raise ValueError("unused-for must be positive")
     if not clean_all and not uri:
@@ -105,24 +155,40 @@ def main(
     cache_base: Path,
     clean_all: bool = False,
     uri: Optional[str] = None,
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     unused_for: Optional[int] = None,
-) -> int:
+) -> bool:
+    """Main function to clean cached repositories.
+
+    Args:
+        cache_base: The base directory for the cache.
+        clean_all: Whether to clean all caches. Defaults to False.
+        uri: The URI of the repository to clean. Defaults to None.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+        unused_for: Only clean caches unused for this many days. Defaults to None.
+
+    Returns:
+        0 if the caches were cleaned successfully, 1 otherwise.
+    """
     check_arguments(clean_all, unused_for, uri)
 
     if clean_all:
-        if clean_cache_all(cache_base, timeout_sec, no_lock, unused_for):
-            return 0
-        return 1
+        return clean_cache_all(cache_base, wait_timeout, no_lock, unused_for)
 
     if uri:
-        if clean_cache_uri(cache_base, uri, timeout_sec, no_lock, unused_for):
-            return 0
-    return 1
+        return clean_cache_uri(cache_base, uri, wait_timeout, no_lock, unused_for)
+
+    assert False, "Should not reach here"
 
 
 def add_clean_options_group(parser: argparse.ArgumentParser):
+    """Adds clean-related options to the argument parser.
+
+    Args:
+        parser: The argument parser to add options to.
+    """
     clean_options_group = parser.add_argument_group("Clean options")
     clean_options_group.add_argument(
         "--all",
@@ -138,6 +204,11 @@ def add_clean_options_group(parser: argparse.ArgumentParser):
 
 
 def create_clean_subparser(subparsers) -> None:
+    """Creates a subparser for the 'clean' command.
+
+    Args:
+        subparsers: The subparsers object to add the 'clean' command to.
+    """
     parser = subparsers.add_parser(
         "clean",
         help="Clean cache",
@@ -152,6 +223,16 @@ def create_clean_subparser(subparsers) -> None:
 def cli_main(
     parser: argparse.ArgumentParser, args: CLIArgumentNamespace, extra_args: List[str]
 ) -> int:
+    """CLI entry point for the 'clean' command.
+
+    Args:
+        parser: The argument parser.
+        args: Parsed command-line arguments.
+        extra_args: Additional arguments passed to the command.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
     if extra_args:
         parser.error(f"Unknown option '{extra_args[0]}'")
     try:
@@ -161,5 +242,5 @@ def cli_main(
 
     cache_base = Path(args.cache_base)
     return main(
-        cache_base, args.all, args.uri, args.timeout, args.no_lock, args.unused_for
+        cache_base, args.all, args.uri, args.wait_timeout, args.no_lock, args.unused_for
     )

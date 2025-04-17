@@ -3,6 +3,7 @@
 import argparse
 import subprocess
 import sys
+import os
 from pathlib import Path
 from typing import List, Literal, Optional
 
@@ -11,7 +12,7 @@ from git_cache_clone.definitions import (
     CACHE_LOCK_FILE_NAME,
     CLONE_DIR_NAME,
 )
-from git_cache_clone.file_lock import get_lock_obj
+from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     add_default_options_group,
@@ -23,16 +24,16 @@ def _add(
     cache_dir: Path,
     uri: str,
     cache_mode: Literal["bare", "mirror"],
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
 ) -> bool:
-    lock = get_lock_obj(
+    lock = FileLock(
         cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
         shared=False,
-        timeout_sec=timeout_sec,
+        wait_timeout=wait_timeout,
     )
     with lock:
-        # also check if the dir exists after getting the lock.
+        # check if the dir exists after getting the lock.
         # we could have been waiting for the lock held by a different clone process
         if (cache_dir / CLONE_DIR_NAME).exists():
             print("Cache already exists", file=sys.stderr)
@@ -56,25 +57,38 @@ def add_to_cache(
     cache_base: Path,
     uri: str,
     cache_mode: Literal["bare", "mirror"],
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     should_refresh: bool = False,
 ) -> Optional[Path]:
-    """Clones the repo into cache"""
+    """Clones the repository into the cache.
+
+    Args:
+        cache_base: The base directory for the cache.
+        uri: The URI of the repository to cache.
+        cache_mode: The mode to use for cloning the repository.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+        should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
+
+    Returns:
+        The path to the cached repository, or None if caching failed.
+    """
     cache_dir = get_cache_dir(cache_base, uri)
     cache_repo_path = cache_dir / CLONE_DIR_NAME
 
     # Ensure parent dirs
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    # check if the dir exists before getting the lock
     if not cache_repo_path.exists():
-        if not _add(cache_dir, uri, cache_mode, timeout_sec, no_lock):
+        # TODO: handle if the lock file already exists
+        os.close(os.open(cache_dir / CACHE_LOCK_FILE_NAME, os.O_CREAT | os.O_EXCL))
+        if not _add(cache_dir, uri, cache_mode, wait_timeout, no_lock):
             return None
 
     elif should_refresh:
         print("Refreshing cache", file=sys.stderr)
-        refresh_cache_at_dir(cache_dir, timeout_sec, no_lock)
+        refresh_cache_at_dir(cache_dir, wait_timeout, no_lock)
 
     print(f"Using cache {cache_repo_path}", file=sys.stderr)
     return cache_dir
@@ -84,24 +98,42 @@ def main(
     cache_base: Path,
     uri: str,
     cache_mode: Literal["bare", "mirror"] = "bare",
-    timeout_sec: int = -1,
+    wait_timeout: int = -1,
     no_lock: bool = False,
     should_refresh: bool = False,
-) -> int:
-    if add_to_cache(
-        cache_base=cache_base,
-        uri=uri,
-        cache_mode=cache_mode,
-        timeout_sec=timeout_sec,
-        no_lock=no_lock,
-        should_refresh=should_refresh,
-    ):
-        return 0
+) -> bool:
+    """Main function to add a repository to the cache.
 
-    return 1
+    Args:
+        cache_base: The base directory for the cache.
+        uri: The URI of the repository to cache.
+        cache_mode: The mode to use for cloning the repository. Defaults to "bare".
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        no_lock: Whether to skip locking. Defaults to False.
+        should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
+
+    Returns:
+        True if the repository was successfully cached, False otherwise.
+    """
+    return (
+        add_to_cache(
+            cache_base=cache_base,
+            uri=uri,
+            cache_mode=cache_mode,
+            wait_timeout=wait_timeout,
+            no_lock=no_lock,
+            should_refresh=should_refresh,
+        )
+        is not None
+    )
 
 
 def add_cache_options_group(parser: argparse.ArgumentParser):
+    """Adds cache-related options to the argument parser.
+
+    Args:
+        parser: The argument parser to add options to.
+    """
     cache_options_group = parser.add_argument_group("Add options")
     cache_options_group.add_argument(
         "--cache-mode",
@@ -118,6 +150,11 @@ def add_cache_options_group(parser: argparse.ArgumentParser):
 
 
 def create_cache_subparser(subparsers) -> None:
+    """Creates a subparser for the 'add' command.
+
+    Args:
+        subparsers: The subparsers object to add the 'add' command to.
+    """
     parser = subparsers.add_parser(
         "add",
         help="Add a repo to cache",
@@ -132,6 +169,16 @@ def create_cache_subparser(subparsers) -> None:
 def cli_main(
     parser: argparse.ArgumentParser, args: CLIArgumentNamespace, extra_args: List[str]
 ) -> int:
+    """CLI entry point for the 'add' command.
+
+    Args:
+        parser: The argument parser.
+        args: Parsed command-line arguments.
+        extra_args: Additional arguments passed to the command.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
     if extra_args:
         parser.error(f"Unknown option '{extra_args[0]}'")
 
@@ -143,7 +190,7 @@ def cli_main(
         cache_base=cache_base,
         uri=args.uri,
         cache_mode=args.cache_mode,
-        timeout_sec=args.timeout,
+        wait_timeout=args.wait_timeout,
         no_lock=args.no_lock,
         should_refresh=args.refresh,
     )
