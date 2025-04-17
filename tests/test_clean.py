@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from git_cache_clone.commands.clean import main as clean_main
-from git_cache_clone.definitions import CACHE_USED_FILE_NAME, CACHE_LOCK_FILE_NAME
+from git_cache_clone.definitions import CACHE_LOCK_FILE_NAME, CACHE_USED_FILE_NAME
 
 
 @pytest.mark.parametrize(
@@ -33,10 +33,11 @@ def test_git_cache_clean_unused(unused_for):
         os.utime(marker, (old_time, old_time))
         result = clean_main(cache_base, clean_all=True, unused_for=unused_for)
 
-        assert result == True
+        assert result is True
         if unused_for <= last_access_time:
             assert not cache_dir.exists(), "Old cache entry should be deleted"
         else:
             assert cache_dir.exists(), "New cache entry should not be deleted"
 
-#TODO : add tests
+
+# TODO : add tests

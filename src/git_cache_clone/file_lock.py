@@ -122,6 +122,5 @@ def acquire_lock(
                 raise
 
         return fd
-    except:
+    finally:
         os.close(fd)
-        raise
