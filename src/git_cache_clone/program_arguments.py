@@ -1,5 +1,11 @@
 import argparse
-from typing import Callable, List, Literal, Optional
+import sys
+from typing import Callable, List, Optional
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 from git_cache_clone.definitions import (
     DEFAULT_CACHE_BASE,

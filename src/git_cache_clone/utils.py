@@ -35,7 +35,7 @@ def get_git_config_value(key: str) -> Optional[str]:
     if _git_config_cache is None:
         # Run git config --list and parse into a dictionary
         try:
-            output = subprocess.check_output(["git", "config", "--list"], text=True)
+            output = subprocess.check_output(["git", "config", "--list"]).decode()
             _git_config_cache = {}
             for line in output.strip().split("\n"):
                 if "=" in line:
@@ -96,7 +96,7 @@ def get_no_lock_from_git_config() -> bool:
 
 
 def normalize_git_uri(uri: str) -> str:
-    """Normalizes a Git repository URI to a canonical HTTPS form for consistent cache key generation.
+    """Normalizes a Git repository URI to a canonical HTTPS form.
 
     Args:
         uri: The Git repository URI to normalize.

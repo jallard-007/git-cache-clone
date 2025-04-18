@@ -4,7 +4,12 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import List, Optional
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 from git_cache_clone.commands.add import (
     add_cache_options_group,
@@ -111,7 +116,8 @@ def main(
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
         no_lock: Whether to skip locking. Defaults to False.
         clone_only: Whether to skip adding the repository to the cache. Defaults to False.
-        no_retry: Whether to skip retrying with a normal clone if the cache clone fails. Defaults to False.
+        no_retry: Whether to skip retrying with a normal clone if the cache clone fails.
+                  Defaults to False.
         should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
         git_clone_args: Additional arguments to pass to the git clone command. Defaults to None.
 

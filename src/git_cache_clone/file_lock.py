@@ -25,7 +25,7 @@ class FileLock:
 
     def __init__(
         self,
-        file: Optional[Union[str, os.PathLike[str]]],
+        file: Optional[Union[str, "os.PathLike[str]"]],
         shared: bool = False,
         wait_timeout: int = -1,
     ):
@@ -72,7 +72,7 @@ class FileLock:
 
 
 def acquire_lock(
-    lock_path: Union[str, os.PathLike[str]], shared: bool = False, timeout: int = -1
+    lock_path: Union[str, "os.PathLike[str]"], shared: bool = False, timeout: int = -1
 ) -> int:
     """
     Safely acquire a shared or exclusive lock on a file.
@@ -84,7 +84,8 @@ def acquire_lock(
         lock_path: Path to the lock file.
         shared: If True, acquires a shared lock instead of an exclusive lock.
         wait_timeout: Number of seconds to wait for the lock before raising an error.
-                     If < 0, wait indefinitely. If 0, try once and fail immediately if not available.
+                      If < 0, wait indefinitely.
+                      If 0, try once and fail immediately if not available.
 
     Returns:
         int: A file descriptor for the lock file. The caller is responsible for closing it.

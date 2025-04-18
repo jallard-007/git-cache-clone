@@ -5,7 +5,12 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import List, Optional
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 from git_cache_clone.commands.refresh import refresh_cache_at_dir
 from git_cache_clone.definitions import (
