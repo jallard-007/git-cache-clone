@@ -70,6 +70,21 @@ class FileLock:
     def is_acquired(self) -> bool:
         return self.fd is not None
 
+def open_lock_file_and_verify(lock_path: Union[str, "os.PathLike[str]"]) -> int:
+    try:
+        pre = os.stat(lock_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Lock file {lock_path} is missing")
+
+    fd = os.open(lock_path, os.O_RDWR)
+    post = os.fstat(fd)
+
+    # ensure that the fd info is the same as before opening the lock file
+    if pre.st_ino != post.st_ino or pre.st_dev != post.st_dev:
+        os.close(fd)
+        raise RuntimeError(f"Lock file {lock_path} was replaced during open")
+
+    return fd
 
 def acquire_lock(
     lock_path: Union[str, "os.PathLike[str]"], shared: bool = False, timeout: int = -1
@@ -95,19 +110,9 @@ def acquire_lock(
         TimeoutError: If the lock could not be acquired within the timeout period.
         OSError: For other file-related errors (e.g., permission denied, I/O error).
     """
-    try:
-        pre = os.stat(lock_path)
-    except FileNotFoundError:
-        raise RuntimeError(f"Lock file {lock_path} is missing")
 
-    fd = os.open(lock_path, os.O_RDWR)
+    fd = open_lock_file_and_verify(lock_path)
     try:
-        # ensure that the fd info is the same as before opening the lock file
-        post = os.fstat(fd)
-        if pre.st_ino != post.st_ino or pre.st_dev != post.st_dev:
-            os.close(fd)
-            raise RuntimeError(f"Lock file {lock_path} was replaced during open")
-
         # set lock type
         lock_type = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
         if timeout == 0:
@@ -123,5 +128,6 @@ def acquire_lock(
                 raise
 
         return fd
-    finally:
+    except:
         os.close(fd)
+        raise
