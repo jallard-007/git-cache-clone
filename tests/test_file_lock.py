@@ -33,7 +33,7 @@ def test_acquire_lock_file_replaced(tmp_path):
     def delayed_open(path, flags, mode=0o777):
         # delete and recreate the file before open returns
         os.remove(lock_file)
-        original_open(lock_file, os.O_RDWR | os.O_CREAT)
+        os.close(original_open(lock_file, os.O_RDWR | os.O_CREAT))
         return original_open(path, flags, mode)
 
     with mock.patch("os.open", side_effect=delayed_open):
@@ -95,7 +95,7 @@ def test_exclusive_lock_blocks_subprocess(tmp_path):
         sys.exit(1)
     """)
 
-    result = subprocess.run(["python3", "-c", script], capture_output=True, text=True)
+    result = subprocess.check_output(["python3", "-c", script]).decode()
     os.close(fd)
 
-    assert result.stdout.strip() == "locked", f"Expected locked, got: {result.stdout}"
+    assert result.strip() == "locked", f"Expected locked, got: {result}"
