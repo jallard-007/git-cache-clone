@@ -3,6 +3,7 @@
 import errno
 import fcntl
 import os
+import sys
 from typing import Optional, Union
 
 from git_cache_clone.utils import timeout_guard
@@ -19,7 +20,6 @@ class FileLock:
 
     Example:
         with FileLock("/tmp/my.lock", shared=True, wait_timeout=5):
-            # Critical section
             ...
     """
 
@@ -70,6 +70,7 @@ class FileLock:
     def is_acquired(self) -> bool:
         return self.fd is not None
 
+
 def open_lock_file_and_verify(lock_path: Union[str, "os.PathLike[str]"]) -> int:
     try:
         pre = os.stat(lock_path)
@@ -85,6 +86,29 @@ def open_lock_file_and_verify(lock_path: Union[str, "os.PathLike[str]"]) -> int:
         raise RuntimeError(f"Lock file {lock_path} was replaced during open")
 
     return fd
+
+
+def lock_with_timeout(fd: int, lock_type: int, timeout: int) -> None:
+    with timeout_guard(timeout):
+        try:
+            fcntl.flock(fd, lock_type)
+        except OSError as ex:
+            if ex.errno in [errno.EACCES, errno.EAGAIN]:
+                raise TimeoutError
+            raise
+
+
+def make_lock(lock_path: Union[str, "os.PathLike[str]"]) -> None:
+    """Safely makes a lock file"""
+    try:
+        # use os.O_EXCL to ensure only one lock file is created
+        os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
+    except FileExistsError:
+        pass
+    except OSError as ex:
+        print(f"ERROR: Unable to make lock file {lock_path}: {ex}", file=sys.stderr)
+        sys.exit(1)
+
 
 def acquire_lock(
     lock_path: Union[str, "os.PathLike[str]"], shared: bool = False, timeout: int = -1
@@ -106,7 +130,8 @@ def acquire_lock(
         int: A file descriptor for the lock file. The caller is responsible for closing it.
 
     Raises:
-        RuntimeError: If the lock file is missing or replaced after opening.
+        FileNotFoundError: If the lock file does not exist or was removed after locking
+        RuntimeError: If the lock file is replaced during opening.
         TimeoutError: If the lock could not be acquired within the timeout period.
         OSError: For other file-related errors (e.g., permission denied, I/O error).
     """
@@ -119,15 +144,24 @@ def acquire_lock(
             lock_type |= fcntl.LOCK_NB
 
         # acquire lock with timeout
-        with timeout_guard(timeout):
-            try:
-                fcntl.flock(fd, lock_type)
-            except OSError as ex:
-                if ex.errno in [errno.EACCES, errno.EAGAIN]:
-                    raise TimeoutError
-                raise
+        lock_with_timeout(fd, lock_type, timeout)
+        
+        # now that we have acquired the lock, make sure that it still exists
+        if not os.path.isfile(lock_path):
+            # if we get here, it likely means that we acquired it after a 'clean' process
+            raise FileNotFoundError(f"Lock file {lock_path} removed after locking")
 
         return fd
+
     except:
         os.close(fd)
         raise
+
+
+# recreate the lock and try again
+
+# clean process should have deleted the whole directory before releasing the lock
+# os.makedirs(os.path.dirname(os.path.abspath(lock_path)), exist_ok=True)
+# make_lock(lock_path)
+
+# lock_with_timeout(fd, lock_type, timeout)

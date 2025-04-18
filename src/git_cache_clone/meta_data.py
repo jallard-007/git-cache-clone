@@ -10,6 +10,17 @@ from typing import Dict, Optional
 # TODO : incorporate this
 
 
+"""
+Repo:           https://github.com/user/repo.git
+Cached:         Yes (last updated: 2025-04-17 14:20)
+Cache Path:     /var/git-cache/user_repo.git
+Ref:            main (HEAD: a1b2c3d)
+Type:           Shallow (depth=10), no submodules
+Disk Usage:     142 MB
+Last Used:      2025-04-18 03:15
+Speedup:        ~3.2x (4.2s vs 13.6s)
+"""
+
 class LockMetaData:
     def __init__(self, meta_path: Path):
         self.meta_path = meta_path

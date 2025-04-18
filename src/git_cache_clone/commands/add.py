@@ -17,7 +17,7 @@ from git_cache_clone.definitions import (
     CACHE_LOCK_FILE_NAME,
     CLONE_DIR_NAME,
 )
-from git_cache_clone.file_lock import FileLock
+from git_cache_clone.file_lock import FileLock, make_lock
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     add_default_options_group,
@@ -25,7 +25,7 @@ from git_cache_clone.program_arguments import (
 from git_cache_clone.utils import get_cache_dir, get_cache_mode_from_git_config
 
 
-def _add(
+def _add_to_cache(
     cache_dir: Path,
     uri: str,
     cache_mode: Literal["bare", "mirror"],
@@ -86,9 +86,8 @@ def add_to_cache(
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     if not cache_repo_path.exists():
-        # TODO: handle if the lock file already exists
-        os.close(os.open(cache_dir / CACHE_LOCK_FILE_NAME, os.O_CREAT | os.O_EXCL))
-        if not _add(cache_dir, uri, cache_mode, wait_timeout, no_lock):
+        make_lock(cache_dir / CACHE_LOCK_FILE_NAME)
+        if not _add_to_cache(cache_dir, uri, cache_mode, wait_timeout, no_lock):
             return None
 
     elif should_refresh:

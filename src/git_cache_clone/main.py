@@ -53,7 +53,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser, known_args, extra_args = parse_args(
         argv if argv is not None else sys.argv[1:]
     )
-    return known_args.func(parser, known_args, extra_args)
+    try:
+        return known_args.func(parser, known_args, extra_args)
+    except Exception as ex:
+        print(f"Caught Exception {type(ex).__name__}: {ex}")
+        # if verbose:
+        print(ex.with_traceback())
+        return 1
 
 
 def parse_args(
