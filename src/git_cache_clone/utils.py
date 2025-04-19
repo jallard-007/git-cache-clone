@@ -20,15 +20,7 @@ from git_cache_clone.definitions import (
 _git_config_cache: Optional[Dict[str, str]] = None
 
 
-def get_git_config_value(key: str) -> Optional[str]:
-    """Gets the value of a Git configuration key.
-
-    Args:
-        key: The Git configuration key to retrieve.
-
-    Returns:
-        The value of the Git configuration key, or None if not found.
-    """
+def get_git_config() -> Dict[str, str]:
     global _git_config_cache
 
     if _git_config_cache is None:
@@ -43,7 +35,19 @@ def get_git_config_value(key: str) -> Optional[str]:
         except subprocess.CalledProcessError:
             _git_config_cache = {}
 
-    return _git_config_cache.get(key)
+    return _git_config_cache
+
+
+def get_git_config_value(key: str) -> Optional[str]:
+    """Gets the value of a Git configuration key.
+
+    Args:
+        key: The Git configuration key to retrieve.
+
+    Returns:
+        The value of the Git configuration key, or None if not found.
+    """
+    return get_git_config().get(key)
 
 
 def get_cache_base_from_git_config() -> Optional[str]:
@@ -87,7 +91,7 @@ def get_use_lock_from_git_config() -> Optional[bool]:
     use_lock = get_git_config_value(GIT_CONFIG_USE_LOCK_VAR_NAME)
     if use_lock is None:
         return None
-    return use_lock.lower() not in ("false", "f", "0")
+    return use_lock.lower() in ("true", "1", "y", "yes")
 
 
 def get_lock_timeout_from_git_config() -> Optional[int]:

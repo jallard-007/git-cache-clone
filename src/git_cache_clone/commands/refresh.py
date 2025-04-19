@@ -137,7 +137,7 @@ def add_refresh_parser_group(parser: argparse.ArgumentParser):
     )
 
 
-def create_refresh_subparser(subparsers) -> None:
+def create_refresh_subparser(subparsers) -> argparse.ArgumentParser:
     """Creates a subparser for the 'refresh' command.
 
     Args:
@@ -152,6 +152,7 @@ def create_refresh_subparser(subparsers) -> None:
     parser.set_defaults(func=cli_main)
     add_default_options_group(parser)
     add_refresh_parser_group(parser)
+    return parser
 
 
 def cli_main(
@@ -176,4 +177,10 @@ def cli_main(
     except ValueError as ex:
         parser.error(str(ex))
 
-    return main(cache_base, args.all, args.uri, args.lock_timeout, args.use_lock)
+    return main(
+        cache_base=cache_base,
+        refresh_all=args.all,
+        uri=args.uri,
+        wait_timeout=args.lock_timeout,
+        use_lock=args.use_lock,
+    )

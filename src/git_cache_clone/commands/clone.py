@@ -63,7 +63,7 @@ def cache_clone(
         [
             "git",
             "clone",
-            "--reference-if-able",
+            "--reference",
             str(cache_dir / CLONE_DIR_NAME),
         ]
         + git_clone_args
@@ -191,7 +191,7 @@ def add_clone_options_group(parser: argparse.ArgumentParser):
     clone_options_group.add_argument("dest", nargs="?")
 
 
-def create_clone_subparser(subparsers) -> None:
+def create_clone_subparser(subparsers) -> argparse.ArgumentParser:
     """Creates a subparser for the 'clone' command.
 
     Args:
@@ -207,6 +207,7 @@ def create_clone_subparser(subparsers) -> None:
     add_default_options_group(parser)
     add_clone_options_group(parser)
     add_cache_options_group(parser)
+    return parser
 
 
 def cli_main(

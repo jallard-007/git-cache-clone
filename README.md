@@ -6,9 +6,9 @@
 
 - Fast `git clone` via `--reference`
 - Subcommands for `clone`, `clean`, `refresh`, `add`
+- Handles concurrent operations on cache entries via file locks
 - Managed cache directory
 - Safe and explicit cache cleanup
-- Handles concurrent operations on cache entries via file locks
 - URL normalization to avoid duplicate cache entries
 
 ## Installation
@@ -25,13 +25,13 @@ When no subcommand is provided, `clone` is assumed.
 
 ### Note on Argument Parsing
 
-Unlike Git, this tool assumes that the first non-option argument (i.e., the first value that does not start with a dash -) is the repository URL.
+Unlike Git, this tool assumes that the first non-option argument (i.e., the first value that does not start with a dash -) is the repository URL. This excludes options that are native to git-cache
 
 As a result, the following standard Git usage:
 
 ```bash
 # Do not do this
-git clone --depth 1 url
+git cache --<git clone option> <arg> <url>
 ```
 
 will be misinterpreted by git cache — the tool would treat 1 as the URL, and the actual URL as the destination path.
@@ -40,7 +40,7 @@ To avoid this, always specify the repository URL first, before any options:
 
 ```bash
 # Do this instead
-git cache url --depth 1
+git cache <url> --<git clone option> <arg>
 ```
 This ordering ensures correct argument parsing.
 
@@ -54,11 +54,13 @@ Some options can also be configured using git config:
 git config --global key value
 ```
 
-- Cache base path: `cache-clone.cache.path`
+- Cache base path: `cacheclone.cachepath`
 
-- Cache mode: `cache-clone.cache.mode` ('bare' or 'mirror')
+- Cache mode: `cacheclone.cachemode` ("bare" or "mirror")
 
-- No file locking: `cache-clone.nolock` (anything other than 'false' or '0' is treated as true)
+- Use file locking: `cacheclone.uselock` ("y", "yes", "true", "1" for yes, else no)
+
+- Lock acquire timeout: `cacheclone.locktimeout` (any valid integer)
 
 ## Requirements
 

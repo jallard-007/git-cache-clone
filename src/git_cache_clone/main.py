@@ -12,6 +12,7 @@ import git_cache_clone.commands.add as add
 import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
+from git_cache_clone.definitions import DEFAULT_SUBCOMMAND
 from git_cache_clone.program_arguments import CLIArgumentNamespace
 
 """
@@ -50,13 +51,7 @@ class DefaultSubcommandArgParse(argparse.ArgumentParser):
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser, known_args, extra_args = parse_args(argv if argv is not None else sys.argv[1:])
-    try:
-        return known_args.func(parser, known_args, extra_args)
-    except Exception as ex:
-        print(f"Caught Exception {type(ex).__name__}: {ex}")
-        # TODO: logger if verbose:
-        print(ex.with_traceback(None))
-        return 1
+    return known_args.func(parser, known_args, extra_args)
 
 
 def parse_args(
@@ -82,6 +77,6 @@ def create_parser() -> argparse.ArgumentParser:
     clean.create_clean_subparser(subparsers)
     refresh.create_refresh_subparser(subparsers)
 
-    parser.set_default_subparser("clone")
+    parser.set_default_subparser(DEFAULT_SUBCOMMAND)
 
     return parser

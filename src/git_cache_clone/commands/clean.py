@@ -201,7 +201,7 @@ def add_clean_options_group(parser: argparse.ArgumentParser):
     )
 
 
-def create_clean_subparser(subparsers) -> None:
+def create_clean_subparser(subparsers) -> argparse.ArgumentParser:
     """Creates a subparser for the 'clean' command.
 
     Args:
@@ -216,6 +216,7 @@ def create_clean_subparser(subparsers) -> None:
     parser.set_defaults(func=cli_main)
     add_default_options_group(parser)
     add_clean_options_group(parser)
+    return parser
 
 
 def cli_main(
@@ -242,10 +243,10 @@ def cli_main(
 
     cache_base = Path(args.cache_base)
     return main(
-        cache_base,
-        args.all,
-        args.uri,
-        args.lock_timeout,
-        args.use_lock,
-        args.unused_for,
+        cache_base=cache_base,
+        clean_all=args.all,
+        uri=args.uri,
+        wait_timeout=args.lock_timeout,
+        use_lock=args.use_lock,
+        unused_for=args.unused_for,
     )

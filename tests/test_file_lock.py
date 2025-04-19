@@ -1,4 +1,4 @@
-# ruff: noqa: F401 F811
+# ruff: noqa: F811
 
 import os
 import subprocess
@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 from git_cache_clone.file_lock import acquire_file_lock, acquire_file_lock_with_retries
-from tests.fixtures import tmp_lock_file
+from tests.fixtures import tmp_lock_file  # noqa: F401
 
 
 def test_acquire_lock_exclusive_success(tmp_lock_file):

@@ -8,6 +8,8 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal
 
+DEFAULT_SUBCOMMAND = "clone"
+
 CACHE_LOCK_FILE_NAME = ".git-cache-lock"
 """lock file name in cache dir"""
 
