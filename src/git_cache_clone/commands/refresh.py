@@ -15,9 +15,7 @@ from git_cache_clone.program_arguments import (
 from git_cache_clone.utils import get_cache_dir
 
 
-def refresh_cache_all(
-    cache_base: Path, wait_timeout: int = -1, use_lock: bool = True
-) -> bool:
+def refresh_cache_all(cache_base: Path, wait_timeout: int = -1, use_lock: bool = True) -> bool:
     """Refreshes all cached repositories.
 
     Args:
@@ -55,9 +53,7 @@ def refresh_cache_at_uri(
     return refresh_cache_at_dir(cache_dir, wait_timeout, use_lock)
 
 
-def refresh_cache_at_dir(
-    cache_dir: Path, wait_timeout: int = -1, use_lock: bool = True
-) -> bool:
+def refresh_cache_at_dir(cache_dir: Path, wait_timeout: int = -1, use_lock: bool = True) -> bool:
     """Refreshes a specific cache directory.
 
     Args:

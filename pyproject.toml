@@ -28,12 +28,20 @@ git-cache = "git_cache_clone.main:main"
 [tool.poetry]
 packages = [{include = "git_cache_clone", from = "src"}]
 
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+pytest-cov = "*"
+mypy = "*"
+ruff = "*"
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.isort]
-profile = "black"
+[tool.ruff]
+line-length = 100
+lint.select = ["E", "F", "I"]  # Errors, Flake8, and import sorting
+lint.ignore = ["E501"]  # Ignore long lines
 
 [tool.coverage.run]
 source = ["src/git_cache_clone"]

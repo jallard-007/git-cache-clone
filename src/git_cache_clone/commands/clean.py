@@ -132,9 +132,7 @@ def _force_remove_cache_dir(cache_dir: Path) -> bool:
     return True
 
 
-def check_arguments(
-    clean_all: bool, unused_for: Optional[int], uri: Optional[str]
-) -> None:
+def check_arguments(clean_all: bool, unused_for: Optional[int], uri: Optional[str]) -> None:
     """Validates the arguments for cleaning the cache.
 
     Args:
@@ -178,9 +176,7 @@ def main(
         return clean_cache_all(cache_base, wait_timeout, use_lock, unused_for)
 
     if uri:
-        return clean_cache_repo_by_uri(
-            cache_base, uri, wait_timeout, use_lock, unused_for
-        )
+        return clean_cache_repo_by_uri(cache_base, uri, wait_timeout, use_lock, unused_for)
 
     assert False, "Should not reach here"
 

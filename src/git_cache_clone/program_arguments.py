@@ -54,9 +54,7 @@ def add_default_options_group(parser: argparse.ArgumentParser):
     default_options_group.add_argument(
         "--use-lock", action="store_true", help="use file locks", dest="use_lock"
     )
-    default_options_group.set_defaults(
-        use_lock=get_use_lock_from_git_config() or DEFAULT_USE_LOCK
-    )
+    default_options_group.set_defaults(use_lock=get_use_lock_from_git_config() or DEFAULT_USE_LOCK)
     default_options_group.add_argument(
         "--lock-timeout",
         type=int,

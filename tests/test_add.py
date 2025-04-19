@@ -1,3 +1,5 @@
+# ruff: noqa: F401
+
 import argparse
 from pathlib import Path
 from typing import Optional
@@ -12,43 +14,12 @@ from git_cache_clone.definitions import (
     DEFAULT_LOCK_TIMEOUT,
 )
 from git_cache_clone.program_arguments import CLIArgumentNamespace
-
-
-@pytest.fixture(autouse=True)
-def patch_get_cache_base_from_config():
-    with mock.patch(
-        "git_cache_clone.program_arguments.get_cache_base_from_git_config",
-        return_value=None,
-    ):
-        yield
-
-
-@pytest.fixture(autouse=True)
-def patch_get_cache_mode_from_config():
-    with mock.patch(
-        "git_cache_clone.commands.add.get_cache_mode_from_git_config",
-        return_value=None,
-    ):
-        yield
-
-
-@pytest.fixture(autouse=True)
-def patch_get_use_lock_from_config():
-    with mock.patch(
-        "git_cache_clone.program_arguments.get_use_lock_from_git_config",
-        return_value=None,
-    ):
-        yield
-
-
-@pytest.fixture(autouse=True)
-def patch_get_lock_timeout_from_config():
-    with mock.patch(
-        "git_cache_clone.program_arguments.get_lock_timeout_from_git_config",
-        return_value=None,
-    ):
-        yield
-
+from tests.fixtures import (
+    patch_get_cache_base_from_config,
+    patch_get_cache_mode_from_config,
+    patch_get_lock_timeout_from_config,
+    patch_get_use_lock_from_config,
+)
 
 # CLI Testing
 

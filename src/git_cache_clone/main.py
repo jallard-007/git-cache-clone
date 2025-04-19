@@ -49,9 +49,7 @@ class DefaultSubcommandArgParse(argparse.ArgumentParser):
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser, known_args, extra_args = parse_args(
-        argv if argv is not None else sys.argv[1:]
-    )
+    parser, known_args, extra_args = parse_args(argv if argv is not None else sys.argv[1:])
     try:
         return known_args.func(parser, known_args, extra_args)
     except Exception as ex:
@@ -66,9 +64,7 @@ def parse_args(
 ) -> Tuple[argparse.ArgumentParser, CLIArgumentNamespace, List[str]]:
     parser = create_parser()
     # Parse known and unknown args
-    known_args, extra_args = parser.parse_known_args(
-        argv, namespace=CLIArgumentNamespace()
-    )
+    known_args, extra_args = parser.parse_known_args(argv, namespace=CLIArgumentNamespace())
     # unknown_args will contain all the normal git-clone options
     return parser, known_args, extra_args
 

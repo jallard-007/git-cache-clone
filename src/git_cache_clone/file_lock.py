@@ -72,9 +72,7 @@ class FileLock:
                 self.file, shared=self.shared, timeout=self.wait_timeout
             )
         else:
-            self.fd = acquire_file_lock(
-                self.file, shared=self.shared, timeout=self.wait_timeout
-            )
+            self.fd = acquire_file_lock(self.file, shared=self.shared, timeout=self.wait_timeout)
 
     def release(self) -> None:
         """
@@ -84,9 +82,7 @@ class FileLock:
         """
         if self.fd is not None:
             if self.check_exists_on_release and os.fstat(self.fd).st_nlink == 0:
-                print(
-                    "WARNING: Lock file does not exist on lock release", file=sys.stderr
-                )
+                print("WARNING: Lock file does not exist on lock release", file=sys.stderr)
 
             os.close(self.fd)
             self.fd = None
