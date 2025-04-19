@@ -21,6 +21,7 @@ Last Used:      2025-04-18 03:15
 Speedup:        ~3.2x (4.2s vs 13.6s)
 """
 
+
 class LockMetaData:
     def __init__(self, meta_path: Path):
         self.meta_path = meta_path

@@ -16,14 +16,14 @@ from git_cache_clone.utils import get_cache_dir
 
 
 def refresh_cache_all(
-    cache_base: Path, wait_timeout: int = -1, no_lock: bool = False
+    cache_base: Path, wait_timeout: int = -1, use_lock: bool = True
 ) -> bool:
     """Refreshes all cached repositories.
 
     Args:
         cache_base: The base directory for the cache.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
 
     Returns:
         True if all caches were refreshed successfully, False otherwise.
@@ -32,13 +32,13 @@ def refresh_cache_all(
     status = True
     for path in paths:
         if (path / CLONE_DIR_NAME).exists():
-            if not refresh_cache_at_dir(path, wait_timeout, no_lock):
+            if not refresh_cache_at_dir(path, wait_timeout, use_lock):
                 status = False
     return status
 
 
 def refresh_cache_at_uri(
-    cache_base: Path, uri: str, wait_timeout: int = -1, no_lock: bool = False
+    cache_base: Path, uri: str, wait_timeout: int = -1, use_lock: bool = True
 ) -> bool:
     """Refreshes a specific cached repository by its URI.
 
@@ -46,24 +46,24 @@ def refresh_cache_at_uri(
         cache_base: The base directory for the cache.
         uri: The URI of the repository to refresh.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
 
     Returns:
         True if the cache was refreshed successfully, False otherwise.
     """
     cache_dir = get_cache_dir(cache_base, uri)
-    return refresh_cache_at_dir(cache_dir, wait_timeout, no_lock)
+    return refresh_cache_at_dir(cache_dir, wait_timeout, use_lock)
 
 
 def refresh_cache_at_dir(
-    cache_dir: Path, wait_timeout: int = -1, no_lock: bool = False
+    cache_dir: Path, wait_timeout: int = -1, use_lock: bool = True
 ) -> bool:
     """Refreshes a specific cache directory.
 
     Args:
         cache_dir: The cache directory to refresh.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
 
     Returns:
         True if the cache was refreshed successfully, False otherwise.
@@ -74,7 +74,7 @@ def refresh_cache_at_dir(
         return False
 
     lock = FileLock(
-        cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
+        cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
     )
@@ -103,7 +103,7 @@ def main(
     refresh_all: bool = False,
     uri: Optional[str] = None,
     wait_timeout: int = -1,
-    no_lock: bool = False,
+    use_lock: bool = True,
 ) -> bool:
     """Main function to refresh cached repositories.
 
@@ -112,17 +112,17 @@ def main(
         refresh_all: Whether to refresh all caches. Defaults to False.
         uri: The URI of the repository to refresh. Defaults to None.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
 
     Returns:
         True if the cache was refreshed successfully, False otherwise.
     """
     _check_arguments(refresh_all, uri)
     if refresh_all:
-        return refresh_cache_all(cache_base, wait_timeout, no_lock)
+        return refresh_cache_all(cache_base, wait_timeout, use_lock)
 
     if uri:
-        return refresh_cache_at_uri(cache_base, uri, wait_timeout, no_lock)
+        return refresh_cache_at_uri(cache_base, uri, wait_timeout, use_lock)
 
     assert False, "Should not reach here"
 
@@ -180,4 +180,4 @@ def cli_main(
     except ValueError as ex:
         parser.error(str(ex))
 
-    return main(cache_base, args.all, args.uri, args.wait_timeout, args.no_lock)
+    return main(cache_base, args.all, args.uri, args.lock_timeout, args.use_lock)

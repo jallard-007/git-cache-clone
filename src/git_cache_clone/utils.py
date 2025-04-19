@@ -10,11 +10,10 @@ from urllib.parse import urlparse, urlunparse
 from git_cache_clone.definitions import (
     CACHE_MODES,
     CACHE_USED_FILE_NAME,
-    DEFAULT_CACHE_BASE,
-    DEFAULT_CACHE_MODE,
     GIT_CONFIG_CACHE_BASE_VAR_NAME,
     GIT_CONFIG_CACHE_MODE_VAR_NAME,
-    GIT_CONFIG_NO_LOCK_VAR_NAME,
+    GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME,
+    GIT_CONFIG_USE_LOCK_VAR_NAME,
 )
 
 # Module-level cache
@@ -47,20 +46,16 @@ def get_git_config_value(key: str) -> Optional[str]:
     return _git_config_cache.get(key)
 
 
-def get_cache_base_from_git_config():
+def get_cache_base_from_git_config() -> Optional[str]:
     """Determines the cache base directory to use.
 
     Returns:
-        The cache base directory as a Path object.
+        The cache base directory as a string
     """
-    cache_base = get_git_config_value(GIT_CONFIG_CACHE_BASE_VAR_NAME)
-    if cache_base:
-        return Path(cache_base)
-
-    return DEFAULT_CACHE_BASE
+    return get_git_config_value(GIT_CONFIG_CACHE_BASE_VAR_NAME)
 
 
-def get_cache_mode_from_git_config() -> str:
+def get_cache_mode_from_git_config() -> Optional[str]:
     """Determines the cache mode to use from Git configuration.
 
     Returns:
@@ -75,24 +70,40 @@ def get_cache_mode_from_git_config() -> str:
             print(
                 (
                     f"git config {GIT_CONFIG_CACHE_MODE_VAR_NAME} {cache_mode}"
-                    f" not one of {CACHE_MODES}. using default"
+                    f" not one of {CACHE_MODES}."
                 ),
                 file=sys.stderr,
             )
 
-    return DEFAULT_CACHE_MODE
+    return None
 
 
-def get_no_lock_from_git_config() -> bool:
+def get_use_lock_from_git_config() -> Optional[bool]:
     """Determines whether locking is disabled from Git configuration.
 
     Returns:
         True if locking is disabled, False otherwise.
     """
-    no_lock = get_git_config_value(GIT_CONFIG_NO_LOCK_VAR_NAME)
-    if no_lock is None:
-        return False
-    return no_lock.lower() != "false" and no_lock != "0"
+    use_lock = get_git_config_value(GIT_CONFIG_USE_LOCK_VAR_NAME)
+    if use_lock is None:
+        return None
+    return use_lock.lower() not in ("false", "f", "0")
+
+
+def get_lock_timeout_from_git_config() -> Optional[int]:
+    """Determines whether locking is disabled from Git configuration.
+
+    Returns:
+        True if locking is disabled, False otherwise.
+    """
+    timeout = get_git_config_value(GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME)
+    if timeout is None:
+        return None
+    try:
+        return int(timeout)
+    except ValueError as ex:
+        print(f"{GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME}: {ex}", file=sys.stderr)
+        return None
 
 
 def normalize_git_uri(uri: str) -> str:

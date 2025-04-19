@@ -6,20 +6,12 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-if sys.version_info >= (3, 8):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
-
 from git_cache_clone.commands.add import (
     add_cache_options_group,
     add_to_cache,
     get_cache_dir,
 )
-from git_cache_clone.definitions import (
-    CACHE_LOCK_FILE_NAME,
-    CLONE_DIR_NAME,
-)
+from git_cache_clone.definitions import CACHE_LOCK_FILE_NAME, CLONE_DIR_NAME, CacheModes
 from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
@@ -52,7 +44,7 @@ def cache_clone(
     uri: str,
     dest: Optional[str] = None,
     wait_timeout: int = -1,
-    no_lock: bool = False,
+    use_lock: bool = True,
 ) -> bool:
     """Performs a cache-based git clone.
 
@@ -62,7 +54,7 @@ def cache_clone(
         uri: The URI of the repository to clone.
         dest: The destination directory for the clone. Defaults to None.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
 
     Returns:
         True if the clone was successful, False otherwise.
@@ -83,7 +75,7 @@ def cache_clone(
 
     # shared lock for read action
     lock = FileLock(
-        cache_dir / CACHE_LOCK_FILE_NAME if not no_lock else None,
+        cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
         shared=True,
         wait_timeout=wait_timeout,
     )
@@ -98,9 +90,9 @@ def main(
     cache_base: Path,
     uri: str,
     dest: Optional[str] = None,
-    cache_mode: Literal["bare", "mirror"] = "bare",
+    cache_mode: CacheModes = "bare",
     wait_timeout: int = -1,
-    no_lock: bool = False,
+    use_lock: bool = True,
     clone_only: bool = False,
     no_retry: bool = False,
     should_refresh: bool = False,
@@ -114,7 +106,7 @@ def main(
         dest: The destination directory for the clone. Defaults to None.
         cache_mode: The mode to use for cloning the repository. Defaults to "bare".
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
         clone_only: Whether to skip adding the repository to the cache. Defaults to False.
         no_retry: Whether to skip retrying with a normal clone if the cache clone fails.
                   Defaults to False.
@@ -135,7 +127,7 @@ def main(
                 uri=uri,
                 cache_mode=cache_mode,
                 wait_timeout=wait_timeout,
-                no_lock=no_lock,
+                use_lock=use_lock,
                 should_refresh=should_refresh,
             )
         except InterruptedError:
@@ -163,7 +155,7 @@ def main(
             uri=uri,
             dest=dest,
             wait_timeout=wait_timeout,
-            no_lock=no_lock,
+            use_lock=use_lock,
         )
     except InterruptedError:
         print("Hit timeout while waiting for lock!", file=sys.stderr)
@@ -239,8 +231,8 @@ def cli_main(
         uri=args.uri,
         dest=args.dest,
         cache_mode=args.cache_mode,
-        wait_timeout=args.wait_timeout,
-        no_lock=args.no_lock,
+        wait_timeout=args.lock_timeout,
+        use_lock=args.use_lock,
         clone_only=args.clone_only,
         no_retry=args.no_retry,
         should_refresh=args.refresh,

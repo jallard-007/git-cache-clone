@@ -20,55 +20,6 @@ from git_cache_clone.program_arguments import (
 from git_cache_clone.utils import get_cache_dir
 
 
-def clean_cache_all(
-    cache_base: Path,
-    wait_timeout: int = -1,
-    no_lock: bool = False,
-    unused_in: Optional[int] = None,
-) -> bool:
-    """Cleans all cached repositories.
-
-    Args:
-        cache_base: The base directory for the cache.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
-        unused_in: Only clean caches unused for this many days. Defaults to None.
-
-    Returns:
-        True if all caches were cleaned successfully, False otherwise.
-    """
-    paths = cache_base.glob("*/")
-    res = True
-    for path in paths:
-        if not _clean_cache_dir(path, wait_timeout, no_lock, unused_in):
-            res = False
-
-    return res
-
-
-def clean_cache_uri(
-    cache_base: Path,
-    uri: str,
-    wait_timeout: int = -1,
-    no_lock: bool = False,
-    unused_in: Optional[int] = None,
-) -> bool:
-    """Cleans a specific cached repository by its URI.
-
-    Args:
-        cache_base: The base directory for the cache.
-        uri: The URI of the repository to clean.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
-        unused_in: Only clean caches unused for this many days. Defaults to None.
-
-    Returns:
-        True if the cache was cleaned successfully, False otherwise.
-    """
-    cache_dir = get_cache_dir(cache_base, uri)
-    return _clean_cache_dir(cache_dir, wait_timeout, no_lock, unused_in)
-
-
 def was_used_within(cache_dir: Path, days: int) -> bool:
     """Checks if a cache directory was used within a certain number of days.
 
@@ -87,25 +38,74 @@ def was_used_within(cache_dir: Path, days: int) -> bool:
         return False  # treat as stale
 
 
-def _clean_cache_dir(
+def clean_cache_all(
+    cache_base: Path,
+    wait_timeout: int = -1,
+    use_lock: bool = True,
+    unused_in: Optional[int] = None,
+) -> bool:
+    """Cleans all cached repositories.
+
+    Args:
+        cache_base: The base directory for the cache.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        use_lock: Use file locking. Defaults to True.
+        unused_in: Only clean caches unused for this many days. Defaults to None.
+
+    Returns:
+        True if all caches were cleaned successfully, False otherwise.
+    """
+    paths = cache_base.glob("*/")
+    res = True
+    for path in paths:
+        if not clean_cache_repo_by_path(path, wait_timeout, use_lock, unused_in):
+            res = False
+
+    return res
+
+
+def clean_cache_repo_by_uri(
+    cache_base: Path,
+    uri: str,
+    wait_timeout: int = -1,
+    use_lock: bool = True,
+    unused_in: Optional[int] = None,
+) -> bool:
+    """Cleans a specific cached repository by its URI.
+
+    Args:
+        cache_base: The base directory for the cache.
+        uri: The URI of the repository to clean.
+        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
+        use_lock: Use file locking. Defaults to True.
+        unused_in: Only clean caches unused for this many days. Defaults to None.
+
+    Returns:
+        True if the cache was cleaned successfully, False otherwise.
+    """
+    cache_dir = get_cache_dir(cache_base, uri)
+    return clean_cache_repo_by_path(cache_dir, wait_timeout, use_lock, unused_in)
+
+
+def clean_cache_repo_by_path(
     cache_dir: Path,
     wait_timeout: int = -1,
-    no_lock: bool = False,
+    use_lock: bool = True,
     unused_in: Optional[int] = None,
 ) -> bool:
     lock = FileLock(
-        None if no_lock else cache_dir / CACHE_LOCK_FILE_NAME,
+        cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
     )
     with lock:
         if unused_in is None or not was_used_within(cache_dir, unused_in):
-            return _remove_cache_dir(cache_dir)
+            return _force_remove_cache_dir(cache_dir)
 
     return True
 
 
-def _remove_cache_dir(cache_dir: Path) -> bool:
+def _force_remove_cache_dir(cache_dir: Path) -> bool:
     """Removes a cache directory.
 
     Args:
@@ -127,9 +127,9 @@ def _remove_cache_dir(cache_dir: Path) -> bool:
     except OSError as ex:
         print(f"Failed to remove cache entry: {ex}", file=sys.stderr)
         return False
-    else:
-        print(f"Removed {cache_dir}", file=sys.stderr)
-        return True
+
+    print(f"Removed {cache_dir}", file=sys.stderr)
+    return True
 
 
 def check_arguments(
@@ -156,7 +156,7 @@ def main(
     clean_all: bool = False,
     uri: Optional[str] = None,
     wait_timeout: int = -1,
-    no_lock: bool = False,
+    use_lock: bool = True,
     unused_for: Optional[int] = None,
 ) -> bool:
     """Main function to clean cached repositories.
@@ -166,7 +166,7 @@ def main(
         clean_all: Whether to clean all caches. Defaults to False.
         uri: The URI of the repository to clean. Defaults to None.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        no_lock: Whether to skip locking. Defaults to False.
+        use_lock: Use file locking. Defaults to True.
         unused_for: Only clean caches unused for this many days. Defaults to None.
 
     Returns:
@@ -175,10 +175,12 @@ def main(
     check_arguments(clean_all, unused_for, uri)
 
     if clean_all:
-        return clean_cache_all(cache_base, wait_timeout, no_lock, unused_for)
+        return clean_cache_all(cache_base, wait_timeout, use_lock, unused_for)
 
     if uri:
-        return clean_cache_uri(cache_base, uri, wait_timeout, no_lock, unused_for)
+        return clean_cache_repo_by_uri(
+            cache_base, uri, wait_timeout, use_lock, unused_for
+        )
 
     assert False, "Should not reach here"
 
@@ -235,6 +237,8 @@ def cli_main(
     """
     if extra_args:
         parser.error(f"Unknown option '{extra_args[0]}'")
+
+    # check arguments before calling main so that we can isolate ValueErrors
     try:
         check_arguments(args.all, args.unused_for, args.uri)
     except ValueError as ex:
@@ -242,5 +246,10 @@ def cli_main(
 
     cache_base = Path(args.cache_base)
     return main(
-        cache_base, args.all, args.uri, args.wait_timeout, args.no_lock, args.unused_for
+        cache_base,
+        args.all,
+        args.uri,
+        args.lock_timeout,
+        args.use_lock,
+        args.unused_for,
     )

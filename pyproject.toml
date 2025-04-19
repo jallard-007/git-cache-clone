@@ -41,3 +41,6 @@ omit = ["tests/*"]
 
 [tool.pytest.ini_options]
 addopts = "--cov --cov-report=term-missing"
+pythonpath = [
+  "src"
+]

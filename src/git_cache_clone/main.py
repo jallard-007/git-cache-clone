@@ -4,7 +4,6 @@ To see usage info for a specific subcommand, run git cache <subcommand> [-h | --
 
 """
 
-
 import argparse
 import sys
 from typing import List, Optional, Tuple
@@ -57,8 +56,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return known_args.func(parser, known_args, extra_args)
     except Exception as ex:
         print(f"Caught Exception {type(ex).__name__}: {ex}")
-        # if verbose:
-        print(ex.with_traceback())
+        # TODO: logger if verbose:
+        print(ex.with_traceback(None))
         return 1
 
 

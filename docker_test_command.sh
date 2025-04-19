@@ -1,1 +1,1 @@
-docker run --rm -it -v $(pwd):$(pwd) -v /tmp/docker-tmp:/tmp -w $(pwd) -u $(id -u) -e PYTHONPATH=src python3.6-test-image:latest python3.6 -m pytest .
+docker run --rm -it -v $(pwd):$(pwd) -w $(pwd) -u $(id -u) -e PYTHONPATH=src python3.6-test-image:latest python3.6 -m pytest .
