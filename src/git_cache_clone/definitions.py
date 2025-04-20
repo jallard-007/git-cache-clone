@@ -23,7 +23,7 @@ CACHE_MODES = ["bare", "mirror"]
 CacheModes = Literal["bare", "mirror"]
 
 # default values
-DEFAULT_CACHE_BASE = str(Path.home() / ".cache" / "git-cache")
+DEFAULT_CACHE_BASE = str(Path.home() / ".local" / "share" / "git-cache")
 DEFAULT_CACHE_MODE = "bare"
 DEFAULT_LOCK_TIMEOUT = -1
 DEFAULT_USE_LOCK = True

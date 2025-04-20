@@ -2,11 +2,13 @@
 
 import errno
 import fcntl
+import logging
 import os
-import sys
 from typing import Optional, Union
 
 from git_cache_clone.utils import timeout_guard
+
+logger = logging.getLogger(__name__)
 
 
 class FileLock:
@@ -81,8 +83,9 @@ class FileLock:
         This method has no effect if the lock is already released.
         """
         if self.fd is not None:
+            logger.debug("Releasing lock")
             if self.check_exists_on_release and os.fstat(self.fd).st_nlink == 0:
-                print("WARNING: Lock file does not exist on lock release", file=sys.stderr)
+                logger.warning("Lock file does not exist on lock release")
 
             os.close(self.fd)
             self.fd = None
@@ -91,7 +94,7 @@ class FileLock:
         return self.fd is not None
 
 
-def acquire_fd_lock(fd: int, shared: bool, timeout: int) -> None:
+def _acquire_fd_lock(fd: int, shared: bool, timeout: int) -> None:
     """
     Acquire a shared or exclusive file lock.
 
@@ -146,14 +149,14 @@ def acquire_file_lock(
         FileNotFoundError: If the lock file does not exist before / after locking.
     """
     fd = os.open(lock_path, os.O_RDWR)
+    logger.debug(f"Attempting to get lock on {lock_path} (shared = {shared}, timeout = {timeout})")
     try:
-        acquire_fd_lock(fd, shared, timeout)
-
+        _acquire_fd_lock(fd, shared, timeout)
+        logger.debug("Got lock")
         # now that we have acquired the lock, make sure that it still exists
         if os.fstat(fd).st_nlink == 0:
             # if we get here, it likely means that we acquired it after a 'clean' process
             raise FileNotFoundError("Lock file removed during lock acquisition")
-
         return fd
     except BaseException:
         os.close(fd)
@@ -164,11 +167,13 @@ def acquire_file_lock_with_retries(
     lock_path: Union[str, "os.PathLike[str]"], shared: bool = False, timeout: int = -1
 ) -> int:
     caught_ex = None
-    for _ in range(5):
+    logger.debug("Getting lock")
+    for i in range(1, 6):
+        logger.debug(f"Attempt #{i}")
         try:
             return acquire_file_lock(lock_path, shared, timeout)
         except FileNotFoundError as ex:
-            print(f"Warning: {ex}", file=sys.stderr)
+            logger.warning(str(ex))
             caught_ex = ex
             os.makedirs(os.path.dirname(lock_path), exist_ok=True)
             make_lock_file(lock_path)
@@ -179,8 +184,10 @@ def acquire_file_lock_with_retries(
 
 def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
     """Safely makes a lock file"""
+    logger.debug("Trying to create lock file")
     try:
         # use os.O_EXCL to ensure only one lock file is created
         os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
+        logger.debug("Lock file created")
     except FileExistsError:
-        pass
+        logger.debug("Lock file already exists")

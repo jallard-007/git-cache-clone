@@ -1,4 +1,5 @@
 import argparse
+import logging
 from typing import Callable, List, Optional
 
 from git_cache_clone.definitions import (
@@ -12,6 +13,8 @@ from git_cache_clone.utils import (
     get_lock_timeout_from_git_config,
     get_use_lock_from_git_config,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CLIArgumentNamespace(argparse.Namespace):

@@ -5,6 +5,7 @@ To see usage info for a specific subcommand, run git cache <subcommand> [-h | --
 """
 
 import argparse
+import logging
 import sys
 from typing import List, Optional, Tuple
 
@@ -14,6 +15,8 @@ import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
 from git_cache_clone.definitions import DEFAULT_SUBCOMMAND
 from git_cache_clone.program_arguments import CLIArgumentNamespace
+
+logger = logging.getLogger(__name__)
 
 """
 Some terminology:
@@ -49,8 +52,35 @@ class DefaultSubcommandArgParse(argparse.ArgumentParser):
         )
 
 
+class InfoStrippingFormatter(logging.Formatter):
+    def format(self, record):
+        if record.levelno == logging.INFO:
+            return f"{record.getMessage()}"
+        else:
+            return super().format(record)
+
+
+def configure_logger(level):
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
+    handler.setFormatter(formatter)
+    package_logger = logging.getLogger(__name__.split(".")[0])
+    package_logger.addHandler(handler)
+    package_logger.setLevel(level)
+    package_logger.propagate = False
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    # TODO add log level and improve logging
     parser, known_args, extra_args = parse_args(argv if argv is not None else sys.argv[1:])
+
+    package_logger = logging.getLogger(__name__.split(".")[0])
+    package_logger.handlers.clear()
+    configure_logger(logging.INFO)
+
+    logger.debug(f"Received args: {argv}")
+    logger.debug(f"Program args: {known_args}")
+    logger.debug(f"Extra args: {extra_args}")
     return known_args.func(parser, known_args, extra_args)
 
 

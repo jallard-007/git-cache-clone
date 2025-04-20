@@ -1,8 +1,8 @@
 """Clone a repo"""
 
 import argparse
+import logging
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,6 +19,8 @@ from git_cache_clone.program_arguments import (
 )
 from git_cache_clone.utils import mark_cache_used
 
+logger = logging.getLogger(__name__)
+
 
 def clone(uri: str, git_clone_args: List[str], dest: Optional[str] = None) -> bool:
     """Performs a normal git clone.
@@ -31,9 +33,11 @@ def clone(uri: str, git_clone_args: List[str], dest: Optional[str] = None) -> bo
     Returns:
         True if the clone was successful, False otherwise.
     """
+    logger.debug("Trying normal clone")
     fallback_cmd = ["git", "clone"] + git_clone_args + [uri]
     if dest:
         fallback_cmd.append(dest)
+    logger.debug(f"Running {' '.join(fallback_cmd)}")
     res = subprocess.run(fallback_cmd)
     return res.returncode == 0
 
@@ -59,12 +63,18 @@ def cache_clone(
     Returns:
         True if the clone was successful, False otherwise.
     """
+    repo_dir = cache_dir / CLONE_DIR_NAME
+    logger.debug(f"Trying cache clone using repository directory {repo_dir}")
+    if not repo_dir.is_dir():
+        logger.debug("Repository directory does not exist!")
+        return False
+
     clone_cmd = (
         [
             "git",
             "clone",
             "--reference",
-            str(cache_dir / CLONE_DIR_NAME),
+            str(repo_dir),
         ]
         + git_clone_args
         + [uri]
@@ -78,9 +88,11 @@ def cache_clone(
         cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
         shared=True,
         wait_timeout=wait_timeout,
+        retry_on_missing=False,
     )
     with lock:
         mark_cache_used(cache_dir)
+        logger.debug(f"Running '{' '.join(clone_cmd)}'")
         res = subprocess.run(clone_cmd)
 
     return res.returncode == 0
@@ -131,7 +143,7 @@ def main(
                 should_refresh=should_refresh,
             )
         except InterruptedError:
-            print("Hit timeout while waiting for lock!", file=sys.stderr)
+            logger.info("Hit timeout while waiting for lock")
             cache_dir = None
     else:
         # don't add to cache, just get cache dir
@@ -141,10 +153,10 @@ def main(
         # cache clone failed
         if not no_retry:
             # try normal clone
-            print("Cache clone failed. Trying normal clone", file=sys.stderr)
+            logger.warning("Cache clone failed. Trying normal clone")
             return clone(uri=uri, git_clone_args=git_clone_args, dest=dest)
 
-        print("Cache clone failed!", file=sys.stderr)
+        logger.error("Cache clone failed!")
         return False
 
     # we have a cache_dir, try cache clone
@@ -158,15 +170,15 @@ def main(
             use_lock=use_lock,
         )
     except InterruptedError:
-        print("Hit timeout while waiting for lock!", file=sys.stderr)
+        logger.info("Hit timeout while waiting for lock")
         cache_clone_res = False
 
     if not cache_clone_res:
         if not no_retry:
-            print("Reference clone failed. Trying normal clone", file=sys.stderr)
+            logger.warning("Reference clone failed. Trying normal clone")
             return clone(uri=uri, git_clone_args=git_clone_args, dest=dest)
 
-        print("Reference clone failed!", file=sys.stderr)
+        logger.error("Reference clone failed!")
 
     return cache_clone_res
 
@@ -227,15 +239,19 @@ def cli_main(
     if not args.uri:
         parser.error("Missing uri")
 
-    return main(
-        cache_base=cache_base,
-        uri=args.uri,
-        dest=args.dest,
-        cache_mode=args.cache_mode,
-        wait_timeout=args.lock_timeout,
-        use_lock=args.use_lock,
-        clone_only=args.clone_only,
-        no_retry=args.no_retry,
-        should_refresh=args.refresh,
-        git_clone_args=extra_args,
+    return (
+        0
+        if main(
+            cache_base=cache_base,
+            uri=args.uri,
+            dest=args.dest,
+            cache_mode=args.cache_mode,
+            wait_timeout=args.lock_timeout,
+            use_lock=args.use_lock,
+            clone_only=args.clone_only,
+            no_retry=args.no_retry,
+            should_refresh=args.refresh,
+            git_clone_args=extra_args,
+        )
+        else 1
     )

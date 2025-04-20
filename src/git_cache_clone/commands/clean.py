@@ -1,8 +1,8 @@
 """Clean cached repos"""
 
 import argparse
+import logging
 import shutil
-import sys
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -18,6 +18,8 @@ from git_cache_clone.program_arguments import (
     add_default_options_group,
 )
 from git_cache_clone.utils import get_cache_dir
+
+logger = logging.getLogger(__name__)
 
 
 def was_used_within(cache_dir: Path, days: int) -> bool:
@@ -84,6 +86,9 @@ def clean_cache_repo_by_uri(
         True if the cache was cleaned successfully, False otherwise.
     """
     cache_dir = get_cache_dir(cache_base, uri)
+    if not cache_dir.is_dir():
+        logger.info(f"Repo {uri} not cached")
+        return True
     return clean_cache_repo_by_path(cache_dir, wait_timeout, use_lock, unused_in)
 
 
@@ -93,10 +98,13 @@ def clean_cache_repo_by_path(
     use_lock: bool = True,
     unused_in: Optional[int] = None,
 ) -> bool:
+    if not cache_dir.is_dir():
+        return True
     lock = FileLock(
         cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
+        check_exists_on_release=False,
     )
     with lock:
         if unused_in is None or not was_used_within(cache_dir, unused_in):
@@ -114,6 +122,7 @@ def _force_remove_cache_dir(cache_dir: Path) -> bool:
     Returns:
         True if the cache directory was removed successfully, False otherwise.
     """
+    logger.debug(f"Removing {cache_dir}")
     try:
         # This might be unnecessary to do in two calls but if the
         # lock file is deleted first and remade by another process, then in theory
@@ -125,10 +134,10 @@ def _force_remove_cache_dir(cache_dir: Path) -> bool:
         if cache_dir.exists():
             shutil.rmtree(cache_dir)
     except OSError as ex:
-        print(f"Failed to remove cache entry: {ex}", file=sys.stderr)
+        logger.warning(f"Failed to remove cache entry: {ex}")
         return False
 
-    print(f"Removed {cache_dir}", file=sys.stderr)
+    logger.info(f"Removed {cache_dir}")
     return True
 
 
@@ -242,11 +251,15 @@ def cli_main(
         parser.error(str(ex))
 
     cache_base = Path(args.cache_base)
-    return main(
-        cache_base=cache_base,
-        clean_all=args.all,
-        uri=args.uri,
-        wait_timeout=args.lock_timeout,
-        use_lock=args.use_lock,
-        unused_for=args.unused_for,
+    return (
+        0
+        if main(
+            cache_base=cache_base,
+            clean_all=args.all,
+            uri=args.uri,
+            wait_timeout=args.lock_timeout,
+            use_lock=args.use_lock,
+            unused_for=args.unused_for,
+        )
+        else 1
     )

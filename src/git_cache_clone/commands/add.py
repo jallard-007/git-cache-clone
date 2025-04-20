@@ -1,8 +1,8 @@
 """Add a repo to cache"""
 
 import argparse
+import logging
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,6 +20,8 @@ from git_cache_clone.program_arguments import (
     add_default_options_group,
 )
 from git_cache_clone.utils import get_cache_dir, get_cache_mode_from_git_config
+
+logger = logging.getLogger(__name__)
 
 
 def add_to_cache(
@@ -45,17 +47,17 @@ def add_to_cache(
 
     """
     cache_dir = get_cache_dir(cache_base, uri)
+    logger.debug(f"Trying to add {uri} to cache at {cache_dir}")
     # Ensure parent dirs
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     cache_repo_path = cache_dir / CLONE_DIR_NAME
 
     if cache_repo_path.exists():
+        logger.debug("Cache already exists")
         if should_refresh:
-            print("Refreshing cache", file=sys.stderr)
+            logger.debug("Refreshing cache")
             refresh_cache_at_dir(cache_dir, wait_timeout, use_lock)
-        else:
-            print("Cache already exists", file=sys.stderr)
         return cache_dir
 
     if use_lock:
@@ -70,7 +72,7 @@ def add_to_cache(
         # check if the dir exists after getting the lock.
         # we could have been waiting for the lock held by a different clone/fetch process
         if cache_repo_path.exists():
-            print("Cache already exists", file=sys.stderr)
+            logger.debug("Cache already exists")
             return cache_dir
 
         git_cmd = [
@@ -82,10 +84,9 @@ def add_to_cache(
             uri,
             CLONE_DIR_NAME,
         ]
-        print(f"Caching repo {uri}", file=sys.stderr)
+        logger.debug(f"Running {' '.join(git_cmd)}")
         res = subprocess.run(git_cmd)
 
-    print(f"Using cache {cache_repo_path}", file=sys.stderr)
     return cache_dir if res.returncode == 0 else None
 
 

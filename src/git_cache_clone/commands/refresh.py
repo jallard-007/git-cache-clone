@@ -1,8 +1,8 @@
 """Refresh cached repos"""
 
 import argparse
+import logging
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -13,6 +13,8 @@ from git_cache_clone.program_arguments import (
     add_default_options_group,
 )
 from git_cache_clone.utils import get_cache_dir
+
+logger = logging.getLogger(__name__)
 
 
 def refresh_cache_all(cache_base: Path, wait_timeout: int = -1, use_lock: bool = True) -> bool:
@@ -26,6 +28,7 @@ def refresh_cache_all(cache_base: Path, wait_timeout: int = -1, use_lock: bool =
     Returns:
         True if all caches were refreshed successfully, False otherwise.
     """
+    logger.debug("Refreshing all cached repos")
     paths = cache_base.glob("*/")
     status = True
     for path in paths:
@@ -65,8 +68,9 @@ def refresh_cache_at_dir(cache_dir: Path, wait_timeout: int = -1, use_lock: bool
         True if the cache was refreshed successfully, False otherwise.
     """
     cache_repo_path = cache_dir / CLONE_DIR_NAME
+    logger.debug(f"Refreshing {cache_repo_path}")
     if not cache_repo_path.exists():
-        print("Repo cache does not exist", file=sys.stderr)
+        logger.warning("Repo cache does not exist")
         return False
 
     lock = FileLock(
@@ -76,6 +80,7 @@ def refresh_cache_at_dir(cache_dir: Path, wait_timeout: int = -1, use_lock: bool
     )
     with lock:
         git_cmd = ["git", "-C", str(cache_repo_path), "fetch", "--prune"]
+        logger.debug(f"Running {' '.join(git_cmd)}")
         res = subprocess.run(git_cmd)
         return res.returncode == 0
 

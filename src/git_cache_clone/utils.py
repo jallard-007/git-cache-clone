@@ -1,7 +1,7 @@
+import logging
 import re
 import signal
 import subprocess
-import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Optional
@@ -15,6 +15,8 @@ from git_cache_clone.definitions import (
     GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME,
     GIT_CONFIG_USE_LOCK_VAR_NAME,
 )
+
+logger = logging.getLogger(__name__)
 
 # Module-level cache
 _git_config_cache: Optional[Dict[str, str]] = None
@@ -71,12 +73,8 @@ def get_cache_mode_from_git_config() -> Optional[str]:
         if cache_mode in CACHE_MODES:
             return cache_mode
         else:
-            print(
-                (
-                    f"git config {GIT_CONFIG_CACHE_MODE_VAR_NAME} {cache_mode}"
-                    f" not one of {CACHE_MODES}."
-                ),
-                file=sys.stderr,
+            logger.warning(
+                (f"{GIT_CONFIG_CACHE_MODE_VAR_NAME} {cache_mode} not one of {CACHE_MODES}."),
             )
 
     return None
@@ -106,7 +104,7 @@ def get_lock_timeout_from_git_config() -> Optional[int]:
     try:
         return int(timeout)
     except ValueError as ex:
-        print(f"{GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME}: {ex}", file=sys.stderr)
+        logger.warning(f"{GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME}: {ex}")
         return None
 
 
