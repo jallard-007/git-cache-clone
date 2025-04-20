@@ -1,24 +1,26 @@
 import argparse
-from pathlib import Path
 from typing import List, Optional
 from unittest import mock
 
 import pytest
 
 from git_cache_clone.commands.clone import cli_main, create_clone_subparser
-from git_cache_clone.definitions import (
-    DEFAULT_CACHE_BASE,
-    DEFAULT_CACHE_MODE,
-    DEFAULT_LOCK_TIMEOUT,
+from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.definitions import DEFAULT_CACHE_MODE
+from git_cache_clone.program_arguments import (
+    CLIArgumentNamespace,
+    get_default_options_parser,
+    get_log_level_options_parser,
 )
-from git_cache_clone.program_arguments import CLIArgumentNamespace
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
 
 @pytest.fixture
 def patched_parser():
     subparsers = argparse.ArgumentParser().add_subparsers()
-    parser = create_clone_subparser(subparsers=subparsers)
+    parser = create_clone_subparser(
+        subparsers, [get_log_level_options_parser(), get_default_options_parser()]
+    )
     parser.error = mock.Mock()
     parser.error.side_effect = SystemExit()
     return parser
@@ -50,6 +52,7 @@ def test_cli_missing_uri(patched_parser):
     ],
 )
 def test_cli_args(
+    patched_parser,
     uri: str,
     cache_base: Optional[str],
     timeout: Optional[int],
@@ -61,9 +64,6 @@ def test_cli_args(
     no_retry: bool,
     extra_args: List[str],
 ):
-    subparsers = argparse.ArgumentParser().add_subparsers()
-    parser = create_clone_subparser(subparsers=subparsers)
-
     args = [uri]
     if dest:
         args.append(dest)
@@ -80,7 +80,7 @@ def test_cli_args(
     if use_lock:
         args.append("--use-lock")
     else:
-        args.append("--no-lock")
+        args.append("--no-use-lock")
     if no_retry:
         args.append("--no-retry")
     if clone_only:
@@ -88,18 +88,18 @@ def test_cli_args(
     if refresh:
         args.append("--refresh")
 
-    parsed_args, unknown_args = parser.parse_known_args(args, namespace=CLIArgumentNamespace())
+    parsed_args, unknown_args = patched_parser.parse_known_args(
+        args, namespace=CLIArgumentNamespace()
+    )
 
     with mock.patch("git_cache_clone.commands.clone.main") as mock_func:
         mock_func.return_value = True
-        cli_main(parser, parsed_args, unknown_args)
-
+        cli_main(patched_parser, parsed_args, unknown_args)
+        config = GitCacheConfig.from_cli_namespace(parsed_args)
         mock_func.assert_called_once_with(
-            cache_base=Path(cache_base) if cache_base else DEFAULT_CACHE_BASE,
+            config=config,
             uri=uri,
             cache_mode=cache_mode or DEFAULT_CACHE_MODE,
-            wait_timeout=timeout or DEFAULT_LOCK_TIMEOUT,
-            use_lock=use_lock,
             should_refresh=refresh,
             dest=dest,
             git_clone_args=extra_args,

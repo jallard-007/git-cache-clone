@@ -1,4 +1,7 @@
-"""Refresh cached repos"""
+"""Refresh cached repos
+
+See `git fetch` for available options; any additional arguments are forwarded directly to `git fetch`.
+"""
 
 import argparse
 import logging
@@ -6,40 +9,48 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
+from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.definitions import CACHE_LOCK_FILE_NAME, CLONE_DIR_NAME
 from git_cache_clone.file_lock import FileLock
-from git_cache_clone.program_arguments import (
-    CLIArgumentNamespace,
-    add_default_options_group,
-)
+from git_cache_clone.program_arguments import CLIArgumentNamespace
 from git_cache_clone.utils import get_cache_dir
 
 logger = logging.getLogger(__name__)
 
 
-def refresh_cache_all(cache_base: Path, wait_timeout: int = -1, use_lock: bool = True) -> bool:
+def refresh_cache_all(
+    cache_base: Path,
+    wait_timeout: int = -1,
+    use_lock: bool = True,
+    git_fetch_args: Optional[List[str]] = None,
+) -> bool:
     """Refreshes all cached repositories.
 
     Args:
         cache_base: The base directory for the cache.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
         use_lock: Use file locking. Defaults to True.
+        git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
         True if all caches were refreshed successfully, False otherwise.
     """
-    logger.debug("Refreshing all cached repos")
+    logger.debug("refreshing all cached repos")
     paths = cache_base.glob("*/")
     status = True
     for path in paths:
         if (path / CLONE_DIR_NAME).exists():
-            if not refresh_cache_at_dir(path, wait_timeout, use_lock):
+            if not refresh_cache_at_dir(path, wait_timeout, use_lock, git_fetch_args):
                 status = False
     return status
 
 
 def refresh_cache_at_uri(
-    cache_base: Path, uri: str, wait_timeout: int = -1, use_lock: bool = True
+    cache_base: Path,
+    uri: str,
+    wait_timeout: int = -1,
+    use_lock: bool = True,
+    git_fetch_args: Optional[List[str]] = None,
 ) -> bool:
     """Refreshes a specific cached repository by its URI.
 
@@ -48,30 +59,41 @@ def refresh_cache_at_uri(
         uri: The URI of the repository to refresh.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
         use_lock: Use file locking. Defaults to True.
+        git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
         True if the cache was refreshed successfully, False otherwise.
     """
     cache_dir = get_cache_dir(cache_base, uri)
-    return refresh_cache_at_dir(cache_dir, wait_timeout, use_lock)
+    return refresh_cache_at_dir(cache_dir, wait_timeout, use_lock, git_fetch_args)
 
 
-def refresh_cache_at_dir(cache_dir: Path, wait_timeout: int = -1, use_lock: bool = True) -> bool:
+def refresh_cache_at_dir(
+    cache_dir: Path,
+    wait_timeout: int = -1,
+    use_lock: bool = True,
+    git_fetch_args: Optional[List[str]] = None,
+) -> bool:
     """Refreshes a specific cache directory.
 
     Args:
         cache_dir: The cache directory to refresh.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
         use_lock: Use file locking. Defaults to True.
+        git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
         True if the cache was refreshed successfully, False otherwise.
     """
     cache_repo_path = cache_dir / CLONE_DIR_NAME
-    logger.debug(f"Refreshing {cache_repo_path}")
+    logger.debug(f"refreshing {cache_repo_path}")
     if not cache_repo_path.exists():
         logger.warning("Repo cache does not exist")
         return False
+
+    git_cmd = ["git", "-C", str(cache_repo_path), "fetch"]
+    if git_fetch_args:
+        git_cmd += git_fetch_args
 
     lock = FileLock(
         cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
@@ -79,8 +101,7 @@ def refresh_cache_at_dir(cache_dir: Path, wait_timeout: int = -1, use_lock: bool
         wait_timeout=wait_timeout,
     )
     with lock:
-        git_cmd = ["git", "-C", str(cache_repo_path), "fetch", "--prune"]
-        logger.debug(f"Running {' '.join(git_cmd)}")
+        logger.debug(f"running {' '.join(git_cmd)}")
         res = subprocess.run(git_cmd)
         return res.returncode == 0
 
@@ -100,11 +121,10 @@ def _check_arguments(refresh_all: bool, uri: Optional[str]) -> None:
 
 
 def main(
-    cache_base: Path,
+    config: GitCacheConfig,
     refresh_all: bool = False,
     uri: Optional[str] = None,
-    wait_timeout: int = -1,
-    use_lock: bool = True,
+    git_fetch_args: Optional[List[str]] = None,
 ) -> bool:
     """Main function to refresh cached repositories.
 
@@ -114,16 +134,21 @@ def main(
         uri: The URI of the repository to refresh. Defaults to None.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
         use_lock: Use file locking. Defaults to True.
+        git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
         True if the cache was refreshed successfully, False otherwise.
     """
     _check_arguments(refresh_all, uri)
     if refresh_all:
-        return refresh_cache_all(cache_base, wait_timeout, use_lock)
+        return refresh_cache_all(
+            config.cache_base, config.lock_wait_timeout, config.use_lock, git_fetch_args
+        )
 
     if uri:
-        return refresh_cache_at_uri(cache_base, uri, wait_timeout, use_lock)
+        return refresh_cache_at_uri(
+            config.cache_base, uri, config.lock_wait_timeout, config.use_lock, git_fetch_args
+        )
 
     assert False, "Should not reach here"
 
@@ -142,7 +167,7 @@ def add_refresh_parser_group(parser: argparse.ArgumentParser):
     )
 
 
-def create_refresh_subparser(subparsers) -> argparse.ArgumentParser:
+def create_refresh_subparser(subparsers, parents) -> argparse.ArgumentParser:
     """Creates a subparser for the 'refresh' command.
 
     Args:
@@ -153,9 +178,8 @@ def create_refresh_subparser(subparsers) -> argparse.ArgumentParser:
         help="Refresh cache",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=parents,
     )
-    parser.set_defaults(func=cli_main)
-    add_default_options_group(parser)
     add_refresh_parser_group(parser)
     return parser
 
@@ -173,19 +197,22 @@ def cli_main(
     Returns:
         Exit code (0 for success, 1 for failure).
     """
-    if extra_args:
-        parser.error(f"Unknown option '{extra_args[0]}'")
+    logger.debug("running refresh subcommand")
 
-    cache_base = Path(args.cache_base)
     try:
         _check_arguments(args.all, args.uri)
     except ValueError as ex:
         parser.error(str(ex))
 
+    config = GitCacheConfig.from_cli_namespace(args)
+
+    git_fetch_args = extra_args
+    git_fetch_args += ["--verbose"] * args.verbose
+    git_fetch_args += ["--quiet"] * args.quiet
+
     return main(
-        cache_base=cache_base,
+        config=config,
         refresh_all=args.all,
         uri=args.uri,
-        wait_timeout=args.lock_timeout,
-        use_lock=args.use_lock,
+        git_fetch_args=git_fetch_args,
     )

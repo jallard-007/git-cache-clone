@@ -14,14 +14,22 @@
 ## Installation
 
 ```bash
-pip install git-cache-clone
+pip3 install git-cache-clone
 ```
 
 ## Usage
 
-The tool provides subcommands to clone repositories using the cache, clean unused entries, and refresh cache state.
+Various subcommands are available. When no subcommand is provided, `clone` is assumed.
 
-When no subcommand is provided, `clone` is assumed.
+`git cache add` - add a repository to cache
+
+`git cache clone` - clone a repository using the cache, adding it if it doesn't exist
+
+`git cache clean` - clean the cache
+
+`git cache refresh` - refresh cache entries by fetching from origin
+
+Using the `--dissociate` option is recommended when using the `clone` command in environments where the cached in regularly cleaned or refreshed, as otherwise your clone will likely break.
 
 ### Note on Argument Parsing
 
@@ -31,16 +39,19 @@ As a result, the following standard Git usage:
 
 ```bash
 # Do not do this
-git cache --<git clone option> <arg> <url>
+git cache --long-opt Arg <url>
+git cache -o Arg <url>
 ```
 
 will be misinterpreted by git cache — the tool would treat 1 as the URL, and the actual URL as the destination path.
 
-To avoid this, always specify the repository URL first, before any options:
+To avoid this, either use the stuck form or specify the repository URL first, before any options:
 
 ```bash
 # Do this instead
-git cache <url> --<git clone option> <arg>
+git cache --long-opt=Arg <url> 
+git cache -oArg <url> 
+git cache <url> --long-opt Arg
 ```
 This ordering ensures correct argument parsing.
 

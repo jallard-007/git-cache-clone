@@ -4,6 +4,7 @@ import time
 import pytest
 
 from git_cache_clone.commands.clean import main as clean_main
+from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.definitions import CACHE_LOCK_FILE_NAME, CACHE_USED_FILE_NAME
 
 
@@ -28,7 +29,8 @@ def test_git_cache_clean_unused(tmp_path, unused_for):
     last_access_time = 31
     old_time = time.time() - (last_access_time * 87400)
     os.utime(marker, (old_time, old_time))
-    result = clean_main(cache_base, clean_all=True, unused_for=unused_for)
+    config = GitCacheConfig(cache_base)
+    result = clean_main(config, clean_all=True, unused_for=unused_for)
 
     assert result is True
     if unused_for <= last_access_time:

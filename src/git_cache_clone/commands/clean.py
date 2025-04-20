@@ -7,16 +7,14 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.definitions import (
     CACHE_LOCK_FILE_NAME,
     CACHE_USED_FILE_NAME,
     CLONE_DIR_NAME,
 )
 from git_cache_clone.file_lock import FileLock
-from git_cache_clone.program_arguments import (
-    CLIArgumentNamespace,
-    add_default_options_group,
-)
+from git_cache_clone.program_arguments import CLIArgumentNamespace
 from git_cache_clone.utils import get_cache_dir
 
 logger = logging.getLogger(__name__)
@@ -41,9 +39,7 @@ def was_used_within(cache_dir: Path, days: int) -> bool:
 
 
 def clean_cache_all(
-    cache_base: Path,
-    wait_timeout: int = -1,
-    use_lock: bool = True,
+    config: GitCacheConfig,
     unused_in: Optional[int] = None,
 ) -> bool:
     """Cleans all cached repositories.
@@ -57,39 +53,35 @@ def clean_cache_all(
     Returns:
         True if all caches were cleaned successfully, False otherwise.
     """
-    paths = cache_base.glob("*/")
+    paths = config.cache_base.glob("*/")
     res = True
     for path in paths:
-        if not clean_cache_repo_by_path(path, wait_timeout, use_lock, unused_in):
+        if not clean_cache_repo_by_path(path, config.lock_wait_timeout, config.use_lock, unused_in):
             res = False
 
     return res
 
 
 def clean_cache_repo_by_uri(
-    cache_base: Path,
+    config: GitCacheConfig,
     uri: str,
-    wait_timeout: int = -1,
-    use_lock: bool = True,
     unused_in: Optional[int] = None,
 ) -> bool:
     """Cleans a specific cached repository by its URI.
 
     Args:
-        cache_base: The base directory for the cache.
+        config:
         uri: The URI of the repository to clean.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        use_lock: Use file locking. Defaults to True.
         unused_in: Only clean caches unused for this many days. Defaults to None.
 
     Returns:
         True if the cache was cleaned successfully, False otherwise.
     """
-    cache_dir = get_cache_dir(cache_base, uri)
+    cache_dir = get_cache_dir(config.cache_base, uri)
     if not cache_dir.is_dir():
         logger.info(f"Repo {uri} not cached")
         return True
-    return clean_cache_repo_by_path(cache_dir, wait_timeout, use_lock, unused_in)
+    return clean_cache_repo_by_path(cache_dir, config.lock_wait_timeout, config.use_lock, unused_in)
 
 
 def clean_cache_repo_by_path(
@@ -122,7 +114,7 @@ def _force_remove_cache_dir(cache_dir: Path) -> bool:
     Returns:
         True if the cache directory was removed successfully, False otherwise.
     """
-    logger.debug(f"Removing {cache_dir}")
+    logger.debug(f"removing {cache_dir}")
     try:
         # This might be unnecessary to do in two calls but if the
         # lock file is deleted first and remade by another process, then in theory
@@ -159,21 +151,17 @@ def check_arguments(clean_all: bool, unused_for: Optional[int], uri: Optional[st
 
 
 def main(
-    cache_base: Path,
+    config: GitCacheConfig,
     clean_all: bool = False,
     uri: Optional[str] = None,
-    wait_timeout: int = -1,
-    use_lock: bool = True,
     unused_for: Optional[int] = None,
 ) -> bool:
     """Main function to clean cached repositories.
 
     Args:
-        cache_base: The base directory for the cache.
+        config:
         clean_all: Whether to clean all caches. Defaults to False.
         uri: The URI of the repository to clean. Defaults to None.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        use_lock: Use file locking. Defaults to True.
         unused_for: Only clean caches unused for this many days. Defaults to None.
 
     Returns:
@@ -182,10 +170,10 @@ def main(
     check_arguments(clean_all, unused_for, uri)
 
     if clean_all:
-        return clean_cache_all(cache_base, wait_timeout, use_lock, unused_for)
+        return clean_cache_all(config, unused_for)
 
     if uri:
-        return clean_cache_repo_by_uri(cache_base, uri, wait_timeout, use_lock, unused_for)
+        return clean_cache_repo_by_uri(config, uri, unused_for)
 
     assert False, "Should not reach here"
 
@@ -210,7 +198,7 @@ def add_clean_options_group(parser: argparse.ArgumentParser):
     )
 
 
-def create_clean_subparser(subparsers) -> argparse.ArgumentParser:
+def create_clean_subparser(subparsers, parents) -> argparse.ArgumentParser:
     """Creates a subparser for the 'clean' command.
 
     Args:
@@ -221,9 +209,8 @@ def create_clean_subparser(subparsers) -> argparse.ArgumentParser:
         help="Clean cache",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=parents,
     )
-    parser.set_defaults(func=cli_main)
-    add_default_options_group(parser)
     add_clean_options_group(parser)
     return parser
 
@@ -241,6 +228,8 @@ def cli_main(
     Returns:
         Exit code (0 for success, 1 for failure).
     """
+    logger.debug("running clean subcommand")
+
     if extra_args:
         parser.error(f"Unknown option '{extra_args[0]}'")
 
@@ -250,15 +239,14 @@ def cli_main(
     except ValueError as ex:
         parser.error(str(ex))
 
-    cache_base = Path(args.cache_base)
+    config = GitCacheConfig.from_cli_namespace(args)
+
     return (
         0
         if main(
-            cache_base=cache_base,
+            config=config,
             clean_all=args.all,
             uri=args.uri,
-            wait_timeout=args.lock_timeout,
-            use_lock=args.use_lock,
             unused_for=args.unused_for,
         )
         else 1

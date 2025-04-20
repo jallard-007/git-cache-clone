@@ -83,7 +83,7 @@ class FileLock:
         This method has no effect if the lock is already released.
         """
         if self.fd is not None:
-            logger.debug("Releasing lock")
+            logger.debug("releasing lock")
             if self.check_exists_on_release and os.fstat(self.fd).st_nlink == 0:
                 logger.warning("Lock file does not exist on lock release")
 
@@ -149,10 +149,9 @@ def acquire_file_lock(
         FileNotFoundError: If the lock file does not exist before / after locking.
     """
     fd = os.open(lock_path, os.O_RDWR)
-    logger.debug(f"Attempting to get lock on {lock_path} (shared = {shared}, timeout = {timeout})")
+    logger.debug(f"getting lock on {lock_path} (shared = {shared}, timeout = {timeout})")
     try:
         _acquire_fd_lock(fd, shared, timeout)
-        logger.debug("Got lock")
         # now that we have acquired the lock, make sure that it still exists
         if os.fstat(fd).st_nlink == 0:
             # if we get here, it likely means that we acquired it after a 'clean' process
@@ -167,9 +166,7 @@ def acquire_file_lock_with_retries(
     lock_path: Union[str, "os.PathLike[str]"], shared: bool = False, timeout: int = -1
 ) -> int:
     caught_ex = None
-    logger.debug("Getting lock")
-    for i in range(1, 6):
-        logger.debug(f"Attempt #{i}")
+    for _ in range(1, 6):
         try:
             return acquire_file_lock(lock_path, shared, timeout)
         except FileNotFoundError as ex:
@@ -184,10 +181,9 @@ def acquire_file_lock_with_retries(
 
 def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
     """Safely makes a lock file"""
-    logger.debug("Trying to create lock file")
+    logger.debug("creating lock file")
     try:
         # use os.O_EXCL to ensure only one lock file is created
         os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
-        logger.debug("Lock file created")
     except FileExistsError:
-        logger.debug("Lock file already exists")
+        logger.debug("lock file already exists")

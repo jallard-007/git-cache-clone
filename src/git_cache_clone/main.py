@@ -7,14 +7,20 @@ To see usage info for a specific subcommand, run git cache <subcommand> [-h | --
 import argparse
 import logging
 import sys
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import git_cache_clone.commands.add as add
 import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
 from git_cache_clone.definitions import DEFAULT_SUBCOMMAND
-from git_cache_clone.program_arguments import CLIArgumentNamespace
+from git_cache_clone.logging import InfoStrippingFormatter, compute_log_level
+from git_cache_clone.program_arguments import (
+    CLIArgumentNamespace,
+    DefaultSubcommandArgParse,
+    get_default_options_parser,
+    get_log_level_options_parser,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,86 +33,55 @@ clone dir - directory in a cache dir where the repo is cloned (cache dir + CLONE
 """
 
 
-class DefaultSubcommandArgParse(argparse.ArgumentParser):
-    __default_subparser: Optional[str] = None
-
-    def set_default_subparser(self, name: str):
-        self.__default_subparser = name
-
-    def _parse_known_args(self, arg_strings, *args, **kwargs):
-        in_args = set(arg_strings)
-        d_sp = self.__default_subparser
-        if d_sp is not None and not {"-h", "--help"}.intersection(in_args):
-            for x in self._subparsers._actions:
-                subparser_found = isinstance(
-                    x, argparse._SubParsersAction
-                ) and in_args.intersection(x._name_parser_map.keys())
-                if subparser_found:
-                    break
-            else:
-                # insert default in first position, this implies no
-                # global options without a sub_parsers specified
-                arg_strings = [d_sp] + arg_strings
-        return super(DefaultSubcommandArgParse, self)._parse_known_args(
-            arg_strings, *args, **kwargs
-        )
-
-
-class InfoStrippingFormatter(logging.Formatter):
-    def format(self, record):
-        if record.levelno == logging.INFO:
-            return f"{record.getMessage()}"
-        else:
-            return super().format(record)
-
-
 def configure_logger(level):
     handler = logging.StreamHandler(sys.stderr)
     formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
     handler.setFormatter(formatter)
     package_logger = logging.getLogger(__name__.split(".")[0])
+    package_logger.handlers.clear()
     package_logger.addHandler(handler)
     package_logger.setLevel(level)
     package_logger.propagate = False
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    # TODO add log level and improve logging
-    parser, known_args, extra_args = parse_args(argv if argv is not None else sys.argv[1:])
+def main(args: Optional[List[str]] = None) -> int:
+    args = args if args is not None else sys.argv[1:]
 
-    package_logger = logging.getLogger(__name__.split(".")[0])
-    package_logger.handlers.clear()
-    configure_logger(logging.INFO)
+    log_level_parser = get_log_level_options_parser()
+    log_level_options, _ = log_level_parser.parse_known_args(args)
 
-    logger.debug(f"Received args: {argv}")
-    logger.debug(f"Program args: {known_args}")
-    logger.debug(f"Extra args: {extra_args}")
-    return known_args.func(parser, known_args, extra_args)
+    level = compute_log_level(log_level_options.verbose, log_level_options.quiet)
+    configure_logger(level)
 
+    logger.debug(f"received args: {args}")
 
-def parse_args(
-    argv: List[str],
-) -> Tuple[argparse.ArgumentParser, CLIArgumentNamespace, List[str]]:
-    parser = create_parser()
-    # Parse known and unknown args
-    known_args, extra_args = parser.parse_known_args(argv, namespace=CLIArgumentNamespace())
-    # unknown_args will contain all the normal git-clone options
-    return parser, known_args, extra_args
-
-
-def create_parser() -> argparse.ArgumentParser:
-    parser = DefaultSubcommandArgParse(
+    main_parser = DefaultSubcommandArgParse(
         description=__doc__,
         prog="git cache",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[log_level_parser],
     )
-    subparsers = parser.add_subparsers(help="subcommand help")
 
-    add.create_cache_subparser(subparsers)
-    clone.create_clone_subparser(subparsers)
-    clean.create_clean_subparser(subparsers)
-    refresh.create_refresh_subparser(subparsers)
+    subparsers = main_parser.add_subparsers(help="subcommand help", dest="subcommand")
+    parents = [log_level_parser, get_default_options_parser()]
+    add_parser = add.create_cache_subparser(subparsers, parents)
+    clone_parser = clone.create_clone_subparser(subparsers, parents)
+    clean_parser = clean.create_clean_subparser(subparsers, parents)
+    refresh_parser = refresh.create_refresh_subparser(subparsers, parents)
+    main_parser.set_default_subparser(DEFAULT_SUBCOMMAND)
 
-    parser.set_default_subparser(DEFAULT_SUBCOMMAND)
+    known_args, extra_args = main_parser.parse_known_args(args, namespace=CLIArgumentNamespace())
 
-    return parser
+    logger.debug(known_args)
+    logger.debug(f"extra args: {extra_args}")
+
+    if known_args.subcommand == "add":
+        return add.cli_main(add_parser, known_args, extra_args)
+    if known_args.subcommand == "clean":
+        return clean.cli_main(clean_parser, known_args, extra_args)
+    if known_args.subcommand == "clone":
+        return clone.cli_main(clone_parser, known_args, extra_args)
+    if known_args.subcommand == "refresh":
+        return refresh.cli_main(refresh_parser, known_args, extra_args)
+
+    raise RuntimeError("Unhandled subcommand!")

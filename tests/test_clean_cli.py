@@ -1,23 +1,19 @@
 import argparse
-from pathlib import Path
 from typing import Optional
 from unittest import mock
 
 import pytest
 
 from git_cache_clone.commands.clean import cli_main, create_clean_subparser
-from git_cache_clone.definitions import (
-    DEFAULT_CACHE_BASE,
-    DEFAULT_LOCK_TIMEOUT,
-)
-from git_cache_clone.program_arguments import CLIArgumentNamespace
+from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.program_arguments import CLIArgumentNamespace, get_default_options_parser
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
 
 @pytest.fixture
 def patched_parser():
     subparsers = argparse.ArgumentParser().add_subparsers()
-    parser = create_clean_subparser(subparsers=subparsers)
+    parser = create_clean_subparser(subparsers, [get_default_options_parser()])
     parser.error = mock.Mock()
     parser.error.side_effect = SystemExit()
     return parser
@@ -46,6 +42,7 @@ def test_cli_extra_args(patched_parser):
     ],
 )
 def test_cli_args(
+    patched_parser,
     uri: str,
     cache_base: Optional[str],
     timeout: Optional[int],
@@ -53,9 +50,6 @@ def test_cli_args(
     all: bool,
     unused_for: Optional[int],
 ):
-    subparsers = argparse.ArgumentParser().add_subparsers()
-    parser = create_clean_subparser(subparsers=subparsers)
-
     args = [uri]
     if cache_base:
         args.append("--cache-base")
@@ -66,24 +60,22 @@ def test_cli_args(
     if use_lock:
         args.append("--use-lock")
     else:
-        args.append("--no-lock")
+        args.append("--no-use-lock")
     if all:
         args.append("--all")
     if unused_for is not None:
         args.append("--unused-for")
         args.append(str(unused_for))
 
-    parsed_args = parser.parse_args(args, namespace=CLIArgumentNamespace())
+    parsed_args = patched_parser.parse_args(args, namespace=CLIArgumentNamespace())
 
     with mock.patch("git_cache_clone.commands.clean.main") as mock_func:
         mock_func.return_value = True
-        cli_main(parser, parsed_args, [])
-
+        cli_main(patched_parser, parsed_args, [])
+        config = GitCacheConfig.from_cli_namespace(parsed_args)
         mock_func.assert_called_once_with(
-            cache_base=Path(cache_base) if cache_base else DEFAULT_CACHE_BASE,
+            config=config,
             uri=uri,
-            wait_timeout=timeout or DEFAULT_LOCK_TIMEOUT,
-            use_lock=use_lock,
             unused_for=unused_for,
             clean_all=all,
         )

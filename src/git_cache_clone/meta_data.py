@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
-# TODO : incorporate this
+# TODO
 
 
 """
