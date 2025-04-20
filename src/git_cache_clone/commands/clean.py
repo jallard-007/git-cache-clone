@@ -100,12 +100,12 @@ def clean_cache_repo_by_path(
     )
     with lock:
         if unused_in is None or not was_used_within(cache_dir, unused_in):
-            return _force_remove_cache_dir(cache_dir)
+            return remove_cache_dir(cache_dir)
 
     return True
 
 
-def _force_remove_cache_dir(cache_dir: Path) -> bool:
+def remove_cache_dir(cache_dir: Path) -> bool:
     """Removes a cache directory.
 
     Args:
@@ -129,7 +129,6 @@ def _force_remove_cache_dir(cache_dir: Path) -> bool:
         logger.warning(f"Failed to remove cache entry: {ex}")
         return False
 
-    logger.info(f"Removed {cache_dir}")
     return True
 
 

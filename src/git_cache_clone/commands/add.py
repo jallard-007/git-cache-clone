@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from git_cache_clone.commands.refresh import refresh_cache_at_dir
+from git_cache_clone.commands.clean import remove_cache_dir
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.definitions import (
     CACHE_LOCK_FILE_NAME,
@@ -87,8 +88,11 @@ def add_to_cache(
 
         logger.debug(f"running {' '.join(git_cmd)}")
         res = subprocess.run(git_cmd)
-
-    return cache_dir if res.returncode == 0 else None
+        if res.returncode != 0:
+            logger.debug("call failed, cleaning up")
+            remove_cache_dir(cache_dir)
+            return None
+        return cache_dir
 
 
 def main(
