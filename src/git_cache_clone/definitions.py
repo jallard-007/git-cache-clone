@@ -22,8 +22,12 @@ CLONE_DIR_NAME = "git"
 CACHE_MODES = ["bare", "mirror"]
 CacheModes = Literal["bare", "mirror"]
 
-# default values
+# default argument values
 DEFAULT_CACHE_BASE = str(Path.home() / ".local" / "share" / "git-cache")
+# TODO: need a sub dir under cache base.
+# git-cache/repos/<cache-entries>
+# git-cache/repos-metadata.db
+# git-cache/repos-metadata.db.lock
 DEFAULT_CACHE_MODE = "bare"
 DEFAULT_LOCK_TIMEOUT = -1
 DEFAULT_USE_LOCK = True
