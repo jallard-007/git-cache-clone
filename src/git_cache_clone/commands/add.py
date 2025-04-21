@@ -9,8 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
-from git_cache_clone.commands.refresh import refresh_cache_at_dir
 from git_cache_clone.commands.clean import remove_cache_dir
+from git_cache_clone.commands.refresh import refresh_cache_at_dir
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.definitions import (
     CACHE_LOCK_FILE_NAME,

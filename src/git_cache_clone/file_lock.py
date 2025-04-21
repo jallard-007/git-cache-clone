@@ -181,7 +181,7 @@ def acquire_file_lock_with_retries(
 
 def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
     """Safely makes a lock file"""
-    logger.debug("creating lock file")
+    logger.debug(f"creating lock file {lock_path}")
     try:
         # use os.O_EXCL to ensure only one lock file is created
         os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
