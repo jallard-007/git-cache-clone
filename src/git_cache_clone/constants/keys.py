@@ -1,0 +1,10 @@
+_GIT_CONFIG_BASE_SECTION = "gitcache"
+
+GIT_CONFIG_USE_LOCK = f"{_GIT_CONFIG_BASE_SECTION}.uselock"
+"""git config key for use-lock option"""
+GIT_CONFIG_BASE_PATH = f"{_GIT_CONFIG_BASE_SECTION}.basepath"
+"""git config key for base path"""
+GIT_CONFIG_CLONE_MODE = f"{_GIT_CONFIG_BASE_SECTION}.clonemode"
+"""git config key for clone mode"""
+GIT_CONFIG_LOCK_TIMEOUT = f"{_GIT_CONFIG_BASE_SECTION}.locktimeout"
+"""git config key for lock timeout"""

@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from .repo_meta import PathList
+from .repo import PathList
 from .utils import convert_to_utc_naive_datetime, parse_utc_naive_iso_to_local_datetime
 
 
@@ -41,10 +41,16 @@ def convert_utc_naive_iso_to_local(val: bytes) -> datetime.datetime:
     return parse_utc_naive_iso_to_local_datetime(val.decode())
 
 
+_adapters_registered = False
+
+
 def register_adapters_and_converters() -> None:
-    sqlite3.register_adapter(PathList, adapt_path_list)
-    sqlite3.register_converter("path_list", convert_path_list)
-    sqlite3.register_adapter(Path, adapt_path)
-    sqlite3.register_converter("path", convert_path)
-    sqlite3.register_adapter(datetime.datetime, adapt_datetime_to_utc_naive_iso)
-    sqlite3.register_converter("datetime", convert_utc_naive_iso_to_local)
+    global _adapters_registered
+    if not _adapters_registered:
+        sqlite3.register_adapter(PathList, adapt_path_list)
+        sqlite3.register_converter("path_list", convert_path_list)
+        sqlite3.register_adapter(Path, adapt_path)
+        sqlite3.register_converter("path", convert_path)
+        sqlite3.register_adapter(datetime.datetime, adapt_datetime_to_utc_naive_iso)
+        sqlite3.register_converter("datetime", convert_utc_naive_iso_to_local)
+        _adapters_registered = True

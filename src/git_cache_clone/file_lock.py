@@ -4,6 +4,7 @@ import errno
 import fcntl
 import logging
 import os
+import sys
 from typing import Optional, Union
 
 from git_cache_clone.utils import timeout_guard
@@ -85,7 +86,7 @@ class FileLock:
         if self.fd is not None:
             logger.debug("releasing lock")
             if self.check_exists_on_release and os.fstat(self.fd).st_nlink == 0:
-                logger.warning("Lock file does not exist on lock release")
+                logger.warning("lock file does not exist on lock release")
 
             os.close(self.fd)
             self.fd = None
@@ -175,7 +176,7 @@ def acquire_file_lock_with_retries(
             os.makedirs(os.path.dirname(lock_path), exist_ok=True)
             make_lock_file(lock_path)
 
-    assert caught_ex is not None, "Exception must be set"
+    assert caught_ex is not None, "exception must be set"
     raise caught_ex
 
 
@@ -186,4 +187,7 @@ def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
         # use os.O_EXCL to ensure only one lock file is created
         os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
     except FileExistsError:
-        logger.debug("lock file already exists")
+        pass
+    except OSError as ex:
+        logger.error(f"cannot make lock file: {ex}")
+        sys.exit(1)

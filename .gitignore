@@ -4,3 +4,5 @@ __pycache__
 dist/
 poetry.lock
 .coverage
+
+t.py

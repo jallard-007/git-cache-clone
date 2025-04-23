@@ -33,7 +33,7 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,cache_base,timeout,use_lock,all,extra_options",
+    "uri,base_path,timeout,use_lock,all,extra_options",
     [
         ("uri", "cache/base/path", 10, True, True, []),
         ("uri.some", "cache/path", -1, False, False, []),
@@ -42,7 +42,7 @@ def test_cli_missing_uri(patched_parser):
 def test_cli_args(
     patched_parser,
     uri: str,
-    cache_base: Optional[str],
+    base_path: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     all: bool,
@@ -51,9 +51,9 @@ def test_cli_args(
     args = [uri]
     if extra_options:
         args += extra_options
-    if cache_base:
-        args.append("--cache-base")
-        args.append(cache_base)
+    if base_path:
+        args.append("--base-path")
+        args.append(base_path)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))

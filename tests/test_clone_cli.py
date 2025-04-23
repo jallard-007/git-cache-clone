@@ -4,9 +4,9 @@ from unittest import mock
 
 import pytest
 
+import git_cache_clone.constants as constants
 from git_cache_clone.commands.clone import cli_main, create_clone_subparser
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.definitions import DEFAULT_CACHE_MODE
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     get_default_options_parser,
@@ -34,7 +34,7 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,cache_base,timeout,use_lock,dest,refresh,cache_mode,clone_only,no_retry,extra_args",
+    "uri,base_path,timeout,use_lock,dest,refresh,clone_mode,clone_only,no_retry,extra_args",
     [
         (
             "some.uri",
@@ -54,12 +54,12 @@ def test_cli_missing_uri(patched_parser):
 def test_cli_args(
     patched_parser,
     uri: str,
-    cache_base: Optional[str],
+    base_path: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     dest: Optional[str],
     refresh: bool,
-    cache_mode: Optional[str],
+    clone_mode: Optional[str],
     clone_only: bool,
     no_retry: bool,
     extra_args: List[str],
@@ -68,12 +68,12 @@ def test_cli_args(
     if dest:
         args.append(dest)
     args += extra_args
-    if cache_base:
-        args.append("--cache-base")
-        args.append(cache_base)
-    if cache_mode:
-        args.append("--cache-mode")
-        args.append(cache_mode)
+    if base_path:
+        args.append("--base-path")
+        args.append(base_path)
+    if clone_mode:
+        args.append("--clone-mode")
+        args.append(clone_mode)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))
@@ -99,7 +99,7 @@ def test_cli_args(
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
-            cache_mode=cache_mode or DEFAULT_CACHE_MODE,
+            clone_mode=clone_mode or constants.defaults.CLONE_MODE,
             should_refresh=refresh,
             dest=dest,
             git_clone_args=extra_args,

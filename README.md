@@ -65,9 +65,9 @@ Some options can also be configured using git config:
 git config --global key value
 ```
 
-- Cache base path: `cacheclone.cachepath`
+- Base path: `cacheclone.basepath`
 
-- Cache mode: `cacheclone.cachemode` ("bare" or "mirror")
+- Clone mode: `cacheclone.clonemode` ("bare" or "mirror")
 
 - Use file locking: `cacheclone.uselock` ("y", "yes", "true", "1" for yes, else no)
 

@@ -9,19 +9,14 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
-from git_cache_clone.commands.clean import remove_cache_dir
-from git_cache_clone.commands.refresh import refresh_cache_at_dir
+import git_cache_clone.constants as constants
+from git_cache_clone.commands.clean import remove_repo_dir
+from git_cache_clone.commands.refresh import refresh_repo
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.definitions import (
-    CACHE_LOCK_FILE_NAME,
-    CACHE_MODES,
-    CLONE_DIR_NAME,
-    DEFAULT_CACHE_MODE,
-    CacheModes,
-)
 from git_cache_clone.file_lock import FileLock, make_lock_file
 from git_cache_clone.program_arguments import CLIArgumentNamespace
-from git_cache_clone.utils import get_cache_dir, get_cache_mode_from_git_config
+from git_cache_clone.types import CLONE_MODES, CloneMode
+from git_cache_clone.utils import get_clone_mode_from_git_config, get_repo_dir
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +24,7 @@ logger = logging.getLogger(__name__)
 def add_to_cache(
     config: GitCacheConfig,
     uri: str,
-    cache_mode: CacheModes,
+    clone_mode: CloneMode,
     should_refresh: bool = False,
     git_clone_args: Optional[List[str]] = None,
 ) -> Optional[Path]:
@@ -38,67 +33,67 @@ def add_to_cache(
     Args:
         config:
         uri: The URI of the repository to cache.
-        cache_mode: The mode to use for cloning the repository.
-        should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
+        clone_mode: The mode to use for cloning the repository.
+        should_refresh: Whether to refresh the repo if it already exists. Defaults to False.
         git_clone_args: options to forward to the 'git clone' call
 
     Returns:
         The path to the cached repository, or None if caching failed.
 
     """
-    cache_dir = get_cache_dir(config.cache_base, uri)
-    logger.debug(f"adding {uri} to cache at {cache_dir}")
+    repo_dir = get_repo_dir(config.base_path, uri)
+    logger.debug(f"adding {uri} to cache at {repo_dir}")
     # Ensure parent dirs
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    repo_dir.mkdir(parents=True, exist_ok=True)
 
-    cache_repo_path = cache_dir / CLONE_DIR_NAME
+    clone_dir = repo_dir / constants.filenames.CLONE_DIR
 
-    if cache_repo_path.exists():
-        logger.debug("cache already exists")
+    if clone_dir.exists():
+        logger.debug("repo already exists")
         if should_refresh:
-            refresh_cache_at_dir(cache_dir, config.lock_wait_timeout, config.use_lock)
-        return cache_dir
+            refresh_repo(repo_dir, config.lock_wait_timeout, config.use_lock)
+        return repo_dir
 
     git_cmd = [
         "git",
         "-C",
-        str(cache_dir),
+        str(repo_dir),
         "clone",
-        f"--{cache_mode}",
+        f"--{clone_mode}",
         uri,
-        CLONE_DIR_NAME,
+        constants.filenames.CLONE_DIR,
     ]
     if git_clone_args:
         git_cmd += git_clone_args
 
     if config.use_lock:
-        make_lock_file(cache_dir / CACHE_LOCK_FILE_NAME)
+        make_lock_file(repo_dir / constants.filenames.REPO_LOCK)
 
     lock = FileLock(
-        cache_dir / CACHE_LOCK_FILE_NAME if config.use_lock else None,
+        repo_dir / constants.filenames.REPO_LOCK if config.use_lock else None,
         shared=False,
         wait_timeout=config.lock_wait_timeout,
     )
     with lock:
         # check if the dir exists after getting the lock.
         # we could have been waiting for the lock held by a different clone/fetch process
-        if cache_repo_path.exists():
-            logger.debug("cache already exists")
-            return cache_dir
+        if clone_dir.exists():
+            logger.debug("entry already exists")
+            return repo_dir
 
         logger.debug(f"running {' '.join(git_cmd)}")
         res = subprocess.run(git_cmd)
         if res.returncode != 0:
             logger.debug("call failed, cleaning up")
-            remove_cache_dir(cache_dir)
+            remove_repo_dir(repo_dir)
             return None
-        return cache_dir
+        return repo_dir
 
 
 def main(
     config: GitCacheConfig,
     uri: str,
-    cache_mode: CacheModes,
+    clone_mode: CloneMode,
     should_refresh: bool = False,
     git_clone_args: Optional[List[str]] = None,
 ) -> bool:
@@ -107,7 +102,7 @@ def main(
     Args:
         config:
         uri: The URI of the repository to cache.
-        cache_mode: The mode to use for cloning the repository. Defaults to "bare".
+        clone_mode: The mode to use for cloning the repository. Defaults to "bare".
         should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
         git_clone_args: options to forward to the 'git clone' call
 
@@ -117,7 +112,7 @@ def main(
     return (
         add_to_cache(
             uri=uri,
-            cache_mode=cache_mode,
+            clone_mode=clone_mode,
             should_refresh=should_refresh,
             config=config,
             git_clone_args=git_clone_args,
@@ -126,7 +121,7 @@ def main(
     )
 
 
-def add_cache_options_group(parser: argparse.ArgumentParser):
+def add_add_options_group(parser: argparse.ArgumentParser):
     """Adds cache-related options to the argument parser.
 
     Args:
@@ -134,9 +129,9 @@ def add_cache_options_group(parser: argparse.ArgumentParser):
     """
     cache_options_group = parser.add_argument_group("Add options")
     cache_options_group.add_argument(
-        "--cache-mode",
-        choices=CACHE_MODES,
-        default=get_cache_mode_from_git_config() or DEFAULT_CACHE_MODE,
+        "--clone-mode",
+        choices=CLONE_MODES,
+        default=get_clone_mode_from_git_config() or constants.defaults.CLONE_MODE,
         help="clone mode for the cache. default is bare",
     )
     cache_options_group.add_argument(
@@ -147,7 +142,7 @@ def add_cache_options_group(parser: argparse.ArgumentParser):
     )
 
 
-def create_cache_subparser(subparsers, parents) -> argparse.ArgumentParser:
+def create_add_subparser(subparsers, parents) -> argparse.ArgumentParser:
     """Creates a subparser for the 'add' command.
 
     Args:
@@ -160,7 +155,7 @@ def create_cache_subparser(subparsers, parents) -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=parents,
     )
-    add_cache_options_group(parser)
+    add_add_options_group(parser)
     return parser
 
 
@@ -192,7 +187,7 @@ def cli_main(
         if main(
             config=config,
             uri=args.uri,
-            cache_mode=args.cache_mode,
+            clone_mode=args.clone_mode,
             should_refresh=args.refresh,
             git_clone_args=git_clone_args,
         )

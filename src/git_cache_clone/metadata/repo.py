@@ -1,4 +1,5 @@
 import datetime
+import sqlite3
 from pathlib import Path
 from typing import List, Optional
 
@@ -13,6 +14,8 @@ Last Used:      2025-04-18 03:15
 Speedup:        ~3.2x (4.2s vs 13.6s)
 """
 
+REPO_METADATA_TABLE_NAME = "repository_metadata"
+
 
 class PathList(list):
     def __init_subclass__(cls):
@@ -22,8 +25,8 @@ class PathList(list):
 class RepoMetadata:
     def __init__(
         self,
-        normalized_remote: str,
-        cache_dir: Optional[Path] = None,
+        normalized_uri: str,
+        repo_dir: Optional[Path] = None,
         added_date: Optional[datetime.datetime] = None,
         removed_date: Optional[datetime.datetime] = None,
         last_fetched_date: Optional[datetime.datetime] = None,
@@ -32,12 +35,12 @@ class RepoMetadata:
         total_num_used: Optional[int] = None,
         clone_time_sec: Optional[float] = None,
         disk_usage_kb: Optional[int] = None,
-        potential_dependents: Optional[PathList] = None,
+        potential_dependents: Optional[List[Path]] = None,
     ):
         # id
-        self.normalized_remote = normalized_remote
+        self.normalized_uri = normalized_uri
 
-        self.cache_dir = cache_dir
+        self.repo_dir = repo_dir
 
         # metrics
         self.added_date = added_date
@@ -54,31 +57,31 @@ class RepoMetadata:
         # note that if the repo gets moved then we won't know
         # occasionally query to see if they still exist
         #   (can look at .git/objects/info/alternates to see if it points to cache path)
-        self.potential_dependents: List[Path] = potential_dependents or PathList()
+        self.potential_dependents: Optional[List[Path]] = potential_dependents
         """Typed as List[pathlib.Path], but actually a PathList.
         This is so that we can set an adapter and converter in sqlite3 
         """
 
     @classmethod
-    def from_db_query(cls, q):
+    def from_tuple(cls, t: tuple):
         return cls(
-            normalized_remote=q["normalized_remote"],
-            cache_dir=q["cache_dir"],
-            added_date=q["added_date"],
-            removed_date=q["removed_date"],
-            last_fetched_date=q["last_fetched_date"],
-            last_pruned_date=q["last_pruned_date"],
-            last_used_date=q["last_used_date"],
-            total_num_used=q["total_num_used"],
-            clone_time_sec=q["clone_time_sec"],
-            disk_usage_kb=q["disk_usage_kb"],
-            potential_dependents=q["potential_dependents"],
+            normalized_uri=t[0],
+            repo_dir=t[1],
+            added_date=t[2],
+            removed_date=t[3],
+            last_fetched_date=t[4],
+            last_pruned_date=t[5],
+            last_used_date=t[6],
+            total_num_used=t[7],
+            clone_time_sec=t[8],
+            disk_usage_kb=t[9],
+            potential_dependents=t[10],
         )
 
-    def to_db_insert_iterable(self) -> tuple:
+    def _to_base_iterable(self) -> tuple:
+        """Returns a tuple of all non-primary fields"""
         return (
-            self.normalized_remote,
-            self.cache_dir,
+            self.repo_dir,
             self.added_date,
             self.removed_date,
             self.last_fetched_date,
@@ -90,12 +93,31 @@ class RepoMetadata:
             self.potential_dependents,
         )
 
+    def db_insert(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            f"INSERT INTO {REPO_METADATA_TABLE_NAME} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (self.normalized_uri,) + self._to_base_iterable(),
+        )
 
-def add_repository_metadata_table(conn):
-    conn.execute("""
-    CREATE TABLE repository_metadata (
-        normalized_remote TEXT NOT NULL PRIMARY KEY,
-        cache_dir path,
+    def db_update(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            (
+                f"UPDATE {REPO_METADATA_TABLE_NAME}"
+                " SET repo_dir = ?, added_date = ?, removed_date = ?,"
+                " last_fetched_date = ?, last_pruned_date = ?,"
+                " last_used_date = ?, total_num_used = ?, clone_time_sec = ?,"
+                " disk_usage_kb = ?, potential_dependents = ?"
+                " WHERE normalized_uri = ?;"
+            ),
+            self._to_base_iterable() + (self.normalized_uri,),
+        )
+
+
+def create_table(conn: sqlite3.Connection) -> None:
+    conn.execute(f"""
+    CREATE TABLE {REPO_METADATA_TABLE_NAME} (
+        normalized_uri TEXT NOT NULL PRIMARY KEY,
+        repo_dir path,
         added_date datetime,
         removed_date datetime,
         last_fetched_date datetime,
@@ -105,5 +127,18 @@ def add_repository_metadata_table(conn):
         clone_time_sec REAL,
         disk_usage_kb INTEGER,
         potential_dependents path_list
-    )
+    );
     """)
+
+
+def select_all(conn: sqlite3.Connection) -> List[RepoMetadata]:
+    statement = f"SELECT * from {REPO_METADATA_TABLE_NAME};"
+    cur = conn.execute(statement)
+    return [RepoMetadata.from_tuple(x) for x in cur.fetchall()]
+
+
+def select(conn: sqlite3.Connection, normalized_uri: str) -> Optional[RepoMetadata]:
+    statement = f"SELECT * from {REPO_METADATA_TABLE_NAME} WHERE normalized_uri = ?;"
+    args = (normalized_uri,)
+    cur = conn.execute(statement, args)
+    return RepoMetadata.from_tuple(cur.fetchone())

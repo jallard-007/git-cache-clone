@@ -2,14 +2,10 @@ import argparse
 import logging
 from typing import Optional
 
-from git_cache_clone.definitions import (
-    DEFAULT_CACHE_BASE,
-    DEFAULT_LOCK_TIMEOUT,
-    DEFAULT_USE_LOCK,
-    CacheModes,
-)
+import git_cache_clone.constants.defaults as defaults
+from git_cache_clone.types import CloneMode
 from git_cache_clone.utils import (
-    get_cache_base_from_git_config,
+    get_base_path_from_git_config,
     get_lock_timeout_from_git_config,
     get_use_lock_from_git_config,
 )
@@ -49,7 +45,7 @@ class CLIArgumentNamespace(argparse.Namespace):
     quiet: int
 
     # config options
-    cache_base: str
+    base_path: str
     use_lock: bool
     lock_timeout: int
 
@@ -60,8 +56,8 @@ class CLIArgumentNamespace(argparse.Namespace):
     no_retry: bool
     dest: Optional[str]
 
-    # cache options
-    cache_mode: CacheModes
+    # add options
+    clone_mode: CloneMode
     refresh: bool
 
     # refresh and clean options
@@ -74,10 +70,10 @@ class CLIArgumentNamespace(argparse.Namespace):
 def get_default_options_parser() -> argparse.ArgumentParser:
     default_options_parser = argparse.ArgumentParser(add_help=False)
     default_options_parser.add_argument(
-        "--cache-base",
+        "--base-path",
         metavar="PATH",
-        default=get_cache_base_from_git_config() or DEFAULT_CACHE_BASE,
-        help=f"default is '{DEFAULT_CACHE_BASE}'",
+        default=get_base_path_from_git_config() or defaults.BASE_PATH,
+        help=f"default is '{defaults.BASE_PATH}'",
     )
     default_options_parser.add_argument(
         "--no-use-lock", action="store_false", help="do not use file locks", dest="use_lock"
@@ -85,12 +81,14 @@ def get_default_options_parser() -> argparse.ArgumentParser:
     default_options_parser.add_argument(
         "--use-lock", action="store_true", help="use file locks", dest="use_lock"
     )
-    default_options_parser.set_defaults(use_lock=get_use_lock_from_git_config() or DEFAULT_USE_LOCK)
+    default_options_parser.set_defaults(
+        use_lock=get_use_lock_from_git_config() or defaults.USE_LOCK
+    )
     default_options_parser.add_argument(
         "--lock-timeout",
         type=int,
         metavar="SECONDS",
-        default=get_lock_timeout_from_git_config() or DEFAULT_LOCK_TIMEOUT,
+        default=get_lock_timeout_from_git_config() or defaults.LOCK_TIMEOUT,
         help="maximum time (in seconds) to wait for a lock",
     )
     default_options_parser.add_argument("uri", nargs="?", default=None)

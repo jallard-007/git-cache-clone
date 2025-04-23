@@ -7,14 +7,8 @@ from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import urlparse, urlunparse
 
-from git_cache_clone.definitions import (
-    CACHE_MODES,
-    CACHE_USED_FILE_NAME,
-    GIT_CONFIG_CACHE_BASE_VAR_NAME,
-    GIT_CONFIG_CACHE_MODE_VAR_NAME,
-    GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME,
-    GIT_CONFIG_USE_LOCK_VAR_NAME,
-)
+import git_cache_clone.constants as constants
+from git_cache_clone.types import CLONE_MODES
 
 logger = logging.getLogger(__name__)
 
@@ -52,29 +46,30 @@ def get_git_config_value(key: str) -> Optional[str]:
     return get_git_config().get(key)
 
 
-def get_cache_base_from_git_config() -> Optional[str]:
-    """Determines the cache base directory to use.
+def get_base_path_from_git_config() -> Optional[str]:
+    """Determines the base path to use.
 
     Returns:
-        The cache base directory as a string
+        The base path as a string
     """
-    return get_git_config_value(GIT_CONFIG_CACHE_BASE_VAR_NAME)
+    return get_git_config_value(constants.keys.GIT_CONFIG_BASE_PATH)
 
 
-def get_cache_mode_from_git_config() -> Optional[str]:
-    """Determines the cache mode to use from Git configuration.
+def get_clone_mode_from_git_config() -> Optional[str]:
+    """Determines the clone mode to use from Git configuration.
 
     Returns:
-        The cache mode as a string.
+        The clone mode as a string.
     """
-    cache_mode = get_git_config_value(GIT_CONFIG_CACHE_MODE_VAR_NAME)
-    if cache_mode:
-        cache_mode = cache_mode.lower()
-        if cache_mode in CACHE_MODES:
-            return cache_mode
+    key = constants.keys.GIT_CONFIG_CLONE_MODE
+    clone_mode = get_git_config_value(key)
+    if clone_mode:
+        clone_mode = clone_mode.lower()
+        if clone_mode in CLONE_MODES:
+            return clone_mode
         else:
             logger.warning(
-                (f"{GIT_CONFIG_CACHE_MODE_VAR_NAME} {cache_mode} not one of {CACHE_MODES}."),
+                (f"{key} {clone_mode} not one of {CLONE_MODES}."),
             )
 
     return None
@@ -86,7 +81,7 @@ def get_use_lock_from_git_config() -> Optional[bool]:
     Returns:
         True if locking is disabled, False otherwise.
     """
-    use_lock = get_git_config_value(GIT_CONFIG_USE_LOCK_VAR_NAME)
+    use_lock = get_git_config_value(constants.keys.GIT_CONFIG_USE_LOCK)
     if use_lock is None:
         return None
     return use_lock.lower() in ("true", "1", "y", "yes")
@@ -98,13 +93,14 @@ def get_lock_timeout_from_git_config() -> Optional[int]:
     Returns:
         True if locking is disabled, False otherwise.
     """
-    timeout = get_git_config_value(GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME)
+    key = constants.keys.GIT_CONFIG_LOCK_TIMEOUT
+    timeout = get_git_config_value(key)
     if timeout is None:
         return None
     try:
         return int(timeout)
     except ValueError as ex:
-        logger.warning(f"{GIT_CONFIG_LOCK_TIMEOUT_VAR_NAME}: {ex}")
+        logger.warning(f"{key}: {ex}")
         return None
 
 
@@ -166,32 +162,31 @@ def flatten_uri(uri: str) -> str:
     Example:
         github.com/user/repo → github.com_user_repo
     """
-    # Remove / to flatten cache dir structure
     return uri.strip("/").replace("/", "_")
 
 
-def get_cache_dir(cache_base: Path, uri: str) -> Path:
+def get_repo_dir(base_path: Path, uri: str) -> Path:
     """Returns the directory where the URI would be cached.
 
     Args:
-        cache_base: The base directory for the cache.
+        base_path: The base path for the cache.
         uri: The URI of the repository.
 
     Returns:
-        The path to the cache directory.
+        path to repo directory.
     """
     normalized = normalize_git_uri(uri)
     flattened = flatten_uri(normalized)
-    return cache_base / flattened
+    return base_path / constants.filenames.REPOS_DIR / flattened
 
 
-def mark_cache_used(cache_dir: Path):
+def mark_repo_used(repo_dir: Path):
     """Marks a cache directory as used.
 
     Args:
-        cache_dir: The cache directory to mark as used.
+        repo_dir: The repo directory to mark as used.
     """
-    marker = cache_dir / CACHE_USED_FILE_NAME
+    marker = repo_dir / constants.filenames.REPO_USED
     marker.touch(exist_ok=True)
 
 

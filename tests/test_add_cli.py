@@ -4,9 +4,9 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.commands.add import cli_main, create_cache_subparser
+import git_cache_clone.constants as constants
+from git_cache_clone.commands.add import cli_main, create_add_subparser
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.definitions import DEFAULT_CACHE_MODE
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     get_default_options_parser,
@@ -18,7 +18,7 @@ from tests.fixtures import patch_get_git_config  # noqa: F401
 @pytest.fixture
 def patched_parser():
     subparsers = argparse.ArgumentParser().add_subparsers()
-    parser = create_cache_subparser(
+    parser = create_add_subparser(
         subparsers, [get_log_level_options_parser(), get_default_options_parser()]
     )
     parser.error = mock.Mock()
@@ -34,7 +34,7 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,cache_base,cache_mode,timeout,use_lock,refresh,extra_options",
+    "uri,base_path,clone_mode,timeout,use_lock,refresh,extra_options",
     [
         ("some.uri", "cache/base/path", "mirror", 10, True, True, []),
         ("uri.some", "cache/path", "bare", -1, False, False, []),
@@ -43,8 +43,8 @@ def test_cli_missing_uri(patched_parser):
 def test_cli_args(
     patched_parser,
     uri: str,
-    cache_base: Optional[str],
-    cache_mode: Optional[str],
+    base_path: Optional[str],
+    clone_mode: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     refresh: bool,
@@ -53,12 +53,12 @@ def test_cli_args(
     args = [uri]
     if extra_options:
         args += extra_options
-    if cache_base:
-        args.append("--cache-base")
-        args.append(cache_base)
-    if cache_mode:
-        args.append("--cache-mode")
-        args.append(cache_mode)
+    if base_path:
+        args.append("--base-path")
+        args.append(base_path)
+    if clone_mode:
+        args.append("--clone-mode")
+        args.append(clone_mode)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))
@@ -80,7 +80,7 @@ def test_cli_args(
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
-            cache_mode=cache_mode or DEFAULT_CACHE_MODE,
+            clone_mode=clone_mode or constants.defaults.CLONE_MODE,
             should_refresh=refresh,
             git_clone_args=extra_options,
         )
