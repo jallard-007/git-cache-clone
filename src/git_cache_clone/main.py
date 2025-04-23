@@ -13,7 +13,7 @@ import git_cache_clone.commands.add as add
 import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
-from git_cache_clone.definitions import DEFAULT_SUBCOMMAND
+import git_cache_clone.constants as constants
 from git_cache_clone.logging import InfoStrippingFormatter, compute_log_level
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
@@ -27,9 +27,19 @@ logger = logging.getLogger(__name__)
 """
 Some terminology:
 
-cache base - directory where all cached repos go
-cache dir - directory where a specific repo is cached (cache base + normalized and flattened uri)
-clone dir - directory in a cache dir where the repo is cloned (cache dir + CLONE_DIR_NAME)
+- base path
+    base directory for all git-cache-clone files
+    contains top level file (repos dir, database)
+
+- repos dir or cache dir
+    directory where all cached repos go
+
+- repo dir 
+    directory where a specific repo is cached (repos dir + normalized and flattened uri).
+    contains files relevant to that specific repo (clone dir, lock file)
+
+- clone dir
+    directory in a repo dir where the repo is actually cloned (repo dir + CLONE_DIR_NAME)
 """
 
 
@@ -64,11 +74,11 @@ def main(args: Optional[List[str]] = None) -> int:
 
     subparsers = main_parser.add_subparsers(help="subcommand help", dest="subcommand")
     parents = [log_level_parser, get_default_options_parser()]
-    add_parser = add.create_cache_subparser(subparsers, parents)
+    add_parser = add.create_add_subparser(subparsers, parents)
     clone_parser = clone.create_clone_subparser(subparsers, parents)
     clean_parser = clean.create_clean_subparser(subparsers, parents)
     refresh_parser = refresh.create_refresh_subparser(subparsers, parents)
-    main_parser.set_default_subparser(DEFAULT_SUBCOMMAND)
+    main_parser.set_default_subparser(constants.core.DEFAULT_SUBCOMMAND)
 
     known_args, extra_args = main_parser.parse_known_args(args, namespace=CLIArgumentNamespace())
 

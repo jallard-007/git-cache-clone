@@ -35,7 +35,7 @@ def test_cli_extra_args(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,cache_base,timeout,use_lock,all,unused_for",
+    "uri,base_path,timeout,use_lock,all,unused_for",
     [
         ("uri", "cache/base/path", 10, True, True, 10),
         ("uri.some", "cache/path", -1, False, False, 15),
@@ -44,16 +44,16 @@ def test_cli_extra_args(patched_parser):
 def test_cli_args(
     patched_parser,
     uri: str,
-    cache_base: Optional[str],
+    base_path: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     all: bool,
     unused_for: Optional[int],
 ):
     args = [uri]
-    if cache_base:
-        args.append("--cache-base")
-        args.append(cache_base)
+    if base_path:
+        args.append("--base-path")
+        args.append(base_path)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))

@@ -9,86 +9,60 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
+import git_cache_clone.constants as constants
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.definitions import CACHE_LOCK_FILE_NAME, CLONE_DIR_NAME
 from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import CLIArgumentNamespace
-from git_cache_clone.utils import get_cache_dir
+from git_cache_clone.utils import get_repo_dir
 
 logger = logging.getLogger(__name__)
 
 
-def refresh_cache_all(
-    cache_base: Path,
-    wait_timeout: int = -1,
-    use_lock: bool = True,
+def refresh_all_repos(
+    config: GitCacheConfig,
     git_fetch_args: Optional[List[str]] = None,
 ) -> bool:
     """Refreshes all cached repositories.
 
     Args:
-        cache_base: The base directory for the cache.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        use_lock: Use file locking. Defaults to True.
+        config:
         git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
         True if all caches were refreshed successfully, False otherwise.
     """
     logger.debug("refreshing all cached repos")
-    paths = cache_base.glob("*/")
+    repos_dir = config.base_path / constants.filenames.REPOS_DIR
+    paths = repos_dir.glob("*/")
     status = True
     for path in paths:
-        if (path / CLONE_DIR_NAME).exists():
-            if not refresh_cache_at_dir(path, wait_timeout, use_lock, git_fetch_args):
+        if (path / constants.filenames.CLONE_DIR).exists():
+            if not refresh_repo(path, config.lock_wait_timeout, config.use_lock, git_fetch_args):
                 status = False
     return status
 
 
-def refresh_cache_at_uri(
-    cache_base: Path,
-    uri: str,
+def refresh_repo(
+    repo_dir: Path,
     wait_timeout: int = -1,
     use_lock: bool = True,
     git_fetch_args: Optional[List[str]] = None,
 ) -> bool:
-    """Refreshes a specific cached repository by its URI.
+    """Refreshes a repository.
 
     Args:
-        cache_base: The base directory for the cache.
-        uri: The URI of the repository to refresh.
+        repo_dir: The repo directory to refresh.
         wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
         use_lock: Use file locking. Defaults to True.
         git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
-        True if the cache was refreshed successfully, False otherwise.
+        True if the repo was refreshed successfully, False otherwise.
     """
-    cache_dir = get_cache_dir(cache_base, uri)
-    return refresh_cache_at_dir(cache_dir, wait_timeout, use_lock, git_fetch_args)
-
-
-def refresh_cache_at_dir(
-    cache_dir: Path,
-    wait_timeout: int = -1,
-    use_lock: bool = True,
-    git_fetch_args: Optional[List[str]] = None,
-) -> bool:
-    """Refreshes a specific cache directory.
-
-    Args:
-        cache_dir: The cache directory to refresh.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        use_lock: Use file locking. Defaults to True.
-        git_fetch_args: options to forward to the 'git fetch' call
-
-    Returns:
-        True if the cache was refreshed successfully, False otherwise.
-    """
-    cache_repo_path = cache_dir / CLONE_DIR_NAME
+    cache_repo_path = repo_dir / constants.filenames.CLONE_DIR
     logger.debug(f"refreshing {cache_repo_path}")
     if not cache_repo_path.exists():
-        logger.warning("Repo cache does not exist")
+        logger.warning("Repo not in cache")
         return False
 
     git_cmd = ["git", "-C", str(cache_repo_path), "fetch"]
@@ -96,7 +70,7 @@ def refresh_cache_at_dir(
         git_cmd += git_fetch_args
 
     lock = FileLock(
-        cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
+        repo_dir / constants.filenames.REPO_LOCK if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
     )
@@ -110,7 +84,7 @@ def _check_arguments(refresh_all: bool, uri: Optional[str]) -> None:
     """Validates the arguments for refreshing the cache.
 
     Args:
-        refresh_all: Whether to refresh all caches.
+        refresh_all: Whether to refresh all repos.
         uri: The URI of the repository to refresh.
 
     Raises:
@@ -126,29 +100,27 @@ def main(
     uri: Optional[str] = None,
     git_fetch_args: Optional[List[str]] = None,
 ) -> bool:
-    """Main function to refresh cached repositories.
+    """Main function to refresh the cache.
 
     Args:
-        cache_base: The base directory for the cache.
-        refresh_all: Whether to refresh all caches. Defaults to False.
+        config:
+        refresh_all: Whether to refresh all repos. Defaults to False.
         uri: The URI of the repository to refresh. Defaults to None.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        use_lock: Use file locking. Defaults to True.
         git_fetch_args: options to forward to the 'git fetch' call
 
     Returns:
-        True if the cache was refreshed successfully, False otherwise.
+        True if the repo(s) refreshed successfully, False otherwise.
     """
     _check_arguments(refresh_all, uri)
     if refresh_all:
-        return refresh_cache_all(
-            config.cache_base, config.lock_wait_timeout, config.use_lock, git_fetch_args
-        )
+        return refresh_all_repos(config, git_fetch_args)
 
     if uri:
-        return refresh_cache_at_uri(
-            config.cache_base, uri, config.lock_wait_timeout, config.use_lock, git_fetch_args
-        )
+        repo_dir = get_repo_dir(config.base_path, uri)
+        if not repo_dir.is_dir():
+            logger.info(f"Repo {uri} not cached")
+            return True
+        return refresh_repo(repo_dir, config.lock_wait_timeout, config.use_lock, git_fetch_args)
 
     assert False, "Should not reach here"
 

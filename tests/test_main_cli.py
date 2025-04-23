@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.definitions import DEFAULT_SUBCOMMAND
+import git_cache_clone.constants as constants
 from git_cache_clone.main import main
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
@@ -20,7 +20,7 @@ from tests.fixtures import patch_get_git_config  # noqa: F401
 )
 def test_cli_sub_command(sub_command: Optional[str]):
     if sub_command is None:
-        sub_command = DEFAULT_SUBCOMMAND
+        sub_command = constants.core.DEFAULT_SUBCOMMAND
         args = []
     else:
         args = [sub_command]

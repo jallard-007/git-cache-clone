@@ -7,30 +7,26 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+import git_cache_clone.constants as constants
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.definitions import (
-    CACHE_LOCK_FILE_NAME,
-    CACHE_USED_FILE_NAME,
-    CLONE_DIR_NAME,
-)
 from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import CLIArgumentNamespace
-from git_cache_clone.utils import get_cache_dir
+from git_cache_clone.utils import get_repo_dir
 
 logger = logging.getLogger(__name__)
 
 
-def was_used_within(cache_dir: Path, days: int) -> bool:
-    """Checks if a cache directory was used within a certain number of days.
+def was_used_within(repo_dir: Path, days: int) -> bool:
+    """Checks if a repo directory was used within a certain number of days.
 
     Args:
-        cache_dir: The cache directory to check.
+        repo_dir: The repo directory to check.
         days: The number of days to check for usage.
 
     Returns:
-        True if the cache was used within the specified number of days, False otherwise.
+        True if the repo was used within the specified number of days, False otherwise.
     """
-    marker = cache_dir / CACHE_USED_FILE_NAME
+    marker = repo_dir / constants.filenames.REPO_USED
     try:
         last_used = marker.stat().st_mtime
         return (time.time() - last_used) < days * 86400
@@ -38,93 +34,71 @@ def was_used_within(cache_dir: Path, days: int) -> bool:
         return False  # treat as stale
 
 
-def clean_cache_all(
+def clean_all_repos(
     config: GitCacheConfig,
     unused_in: Optional[int] = None,
 ) -> bool:
     """Cleans all cached repositories.
 
     Args:
-        cache_base: The base directory for the cache.
-        wait_timeout: Timeout for acquiring the lock. Defaults to -1 (no timeout).
-        use_lock: Use file locking. Defaults to True.
-        unused_in: Only clean caches unused for this many days. Defaults to None.
+        config:
+        unused_in: Only clean repo unused for this many days. Defaults to None.
 
     Returns:
-        True if all caches were cleaned successfully, False otherwise.
+        True if all repo were cleaned successfully, False otherwise.
     """
-    paths = config.cache_base.glob("*/")
+    logger.debug("refreshing all cached repos")
+    repos_dir = config.base_path / constants.filenames.REPOS_DIR
+    paths = repos_dir.glob("*/")
     res = True
     for path in paths:
-        if not clean_cache_repo_by_path(path, config.lock_wait_timeout, config.use_lock, unused_in):
+        if not clean_repo(path, config.lock_wait_timeout, config.use_lock, unused_in):
             res = False
 
     return res
 
 
-def clean_cache_repo_by_uri(
-    config: GitCacheConfig,
-    uri: str,
-    unused_in: Optional[int] = None,
-) -> bool:
-    """Cleans a specific cached repository by its URI.
-
-    Args:
-        config:
-        uri: The URI of the repository to clean.
-        unused_in: Only clean caches unused for this many days. Defaults to None.
-
-    Returns:
-        True if the cache was cleaned successfully, False otherwise.
-    """
-    cache_dir = get_cache_dir(config.cache_base, uri)
-    if not cache_dir.is_dir():
-        logger.info(f"Repo {uri} not cached")
-        return True
-    return clean_cache_repo_by_path(cache_dir, config.lock_wait_timeout, config.use_lock, unused_in)
-
-
-def clean_cache_repo_by_path(
-    cache_dir: Path,
+def clean_repo(
+    repo_dir: Path,
     wait_timeout: int = -1,
     use_lock: bool = True,
     unused_in: Optional[int] = None,
 ) -> bool:
-    if not cache_dir.is_dir():
+    if not repo_dir.is_dir():
         return True
     lock = FileLock(
-        cache_dir / CACHE_LOCK_FILE_NAME if use_lock else None,
+        repo_dir / constants.filenames.REPO_LOCK if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
         check_exists_on_release=False,
     )
     with lock:
-        if unused_in is None or not was_used_within(cache_dir, unused_in):
-            return remove_cache_dir(cache_dir)
+        if unused_in is None or not was_used_within(repo_dir, unused_in):
+            return remove_repo_dir(repo_dir)
 
     return True
 
 
-def remove_cache_dir(cache_dir: Path) -> bool:
-    """Removes a cache directory.
+def remove_repo_dir(repo_dir: Path) -> bool:
+    """Removes a repo directory.
 
     Args:
-        cache_dir: The cache directory to remove.
+        repo_dir: The repo directory to remove.
 
     Returns:
-        True if the cache directory was removed successfully, False otherwise.
+        True if the repo directory was removed successfully, False otherwise.
     """
-    logger.debug(f"removing {cache_dir}")
+    logger.debug(f"removing {repo_dir}")
     try:
         # This might be unnecessary to do in two calls but if the
         # lock file is deleted first and remade by another process, then in theory
         # there could be a git clone and rmtree operation happening at the same time.
         # remove the git dir first just to be safe
-        clone_dir = cache_dir / CLONE_DIR_NAME
+        clone_dir = repo_dir / constants.filenames.CLONE_DIR
         if clone_dir.exists():
             shutil.rmtree(clone_dir)
-        if cache_dir.exists():
-            shutil.rmtree(cache_dir)
+        if repo_dir.exists():
+            shutil.rmtree(repo_dir)
     except OSError as ex:
         logger.warning(f"Failed to remove cache entry: {ex}")
         return False
@@ -169,10 +143,14 @@ def main(
     check_arguments(clean_all, unused_for, uri)
 
     if clean_all:
-        return clean_cache_all(config, unused_for)
+        return clean_all_repos(config, unused_for)
 
     if uri:
-        return clean_cache_repo_by_uri(config, uri, unused_for)
+        repo_dir = get_repo_dir(config.base_path, uri)
+        if not repo_dir.is_dir():
+            logger.info(f"Repo {uri} not cached")
+            return True
+        return clean_repo(repo_dir, config.lock_wait_timeout, config.use_lock, unused_for)
 
     assert False, "Should not reach here"
 
