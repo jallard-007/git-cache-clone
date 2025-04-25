@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-import git_cache_clone.constants as constants
+import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import CLIArgumentNamespace
@@ -26,7 +26,7 @@ def was_used_within(repo_pod_dir: Path, days: int) -> bool:
     Returns:
         True if the repo was used within the specified number of days, False otherwise.
     """
-    marker = repo_pod_dir / constants.filenames.REPO_USED
+    marker = repo_pod_dir / filenames.REPO_USED
     try:
         last_used = marker.stat().st_mtime
         return (time.time() - last_used) < days * 86400
@@ -45,14 +45,18 @@ def remove_all_repos(
         unused_in: Only clean repo unused for this many days. Defaults to None.
 
     Returns:
-        True if all repo were cleaned successfully, False otherwise.
+        True if all repos were cleaned successfully, False otherwise.
     """
     logger.debug("refreshing all cached repos")
-    repos_dir = config.root_dir / constants.filenames.REPOS_DIR
+    repos_dir = config.root_dir / filenames.REPOS_DIR
     paths = repos_dir.glob("*/")
     res = True
     for path in paths:
-        if not remove_repo_pod_dir(path, config.lock_wait_timeout, config.use_lock, unused_in):
+        try:
+            if not remove_repo_pod_dir(path, config.lock_wait_timeout, config.use_lock, unused_in):
+                res = False
+        except InterruptedError:
+            logger.warning("timeout hit while waiting for lock")
             res = False
 
     return res
@@ -70,12 +74,14 @@ def remove_repo_pod_dir(
         return True
 
     lock = FileLock(
-        repo_pod_dir / constants.filenames.REPO_LOCK if use_lock else None,
+        repo_pod_dir / filenames.REPO_LOCK if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
         check_exists_on_release=False,
     )
     with lock:
+        if not repo_pod_dir.is_dir():
+            return True
         if unused_in is None or not was_used_within(repo_pod_dir, unused_in):
             return _remove_pod_from_disk(repo_pod_dir)
 
@@ -96,7 +102,7 @@ def check_arguments(clean_all: bool, unused_for: Optional[int], uri: Optional[st
     if unused_for is not None and unused_for < 0:
         raise ValueError("unused-for must be positive")
     if not clean_all and not uri:
-        raise ValueError("Missing uri")
+        raise ValueError("missing uri")
 
 
 def main(
@@ -122,13 +128,19 @@ def main(
         return remove_all_repos(config, unused_for)
 
     if uri:
-        repo_dir = get_repo_pod_dir(config.root_dir, uri)
-        if not repo_dir.is_dir():
-            logger.info(f"Repo {uri} not cached")
+        repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
+        if not repo_pod_dir.is_dir():
+            logger.info(f"repo {uri} not cached")
             return True
-        return remove_repo_pod_dir(repo_dir, config.lock_wait_timeout, config.use_lock, unused_for)
+        try:
+            return remove_repo_pod_dir(
+                repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for
+            )
+        except InterruptedError:
+            logger.warning("timeout hit while waiting for lock")
+            return False
 
-    assert False, "Should not reach here"
+    assert False, "should not reach here"
 
 
 def add_clean_options_group(parser: argparse.ArgumentParser):
@@ -141,13 +153,13 @@ def add_clean_options_group(parser: argparse.ArgumentParser):
     clean_options_group.add_argument(
         "--all",
         action="store_true",
-        help="clean all cache entries",
+        help="remove all repos",
     )
     clean_options_group.add_argument(
         "--unused-for",
         type=int,
         metavar="DAYS",
-        help="Only remove cache entry if not used in the last DAYS days",
+        help="only remove if not used in the last DAYS days",
     )
 
 

@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-import git_cache_clone.constants as constants
+import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.commands.clean import main as clean_main
 from git_cache_clone.config import GitCacheConfig
 
@@ -19,13 +19,13 @@ from git_cache_clone.config import GitCacheConfig
 def test_git_cache_clean_unused(tmp_path, unused_for):
     root_dir = tmp_path / "cache"
     root_dir.mkdir()
-    cache_dir = root_dir / constants.filenames.REPOS_DIR
+    cache_dir = root_dir / filenames.REPOS_DIR
     cache_dir.mkdir()
     repo_dir = cache_dir / "github.com_temp"
     repo_dir.mkdir()
-    lock_file = repo_dir / constants.filenames.REPO_LOCK
+    lock_file = repo_dir / filenames.REPO_LOCK
     lock_file.touch()
-    marker = repo_dir / constants.filenames.REPO_USED
+    marker = repo_dir / filenames.REPO_USED
     marker.touch()
     # simulate just over a 31-day-old access
     last_access_time = 31
