@@ -1,8 +1,7 @@
-"""Clean cached repos"""
+"""clean cached repositories"""
 
 import argparse
 import logging
-import shutil
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -11,12 +10,13 @@ import git_cache_clone.constants as constants
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import CLIArgumentNamespace
-from git_cache_clone.utils import get_repo_dir
+from git_cache_clone.repo_pod import remove_pod_from_disk as _remove_pod_from_disk
+from git_cache_clone.utils import get_repo_pod_dir
 
 logger = logging.getLogger(__name__)
 
 
-def was_used_within(repo_dir: Path, days: int) -> bool:
+def was_used_within(repo_pod_dir: Path, days: int) -> bool:
     """Checks if a repo directory was used within a certain number of days.
 
     Args:
@@ -26,7 +26,7 @@ def was_used_within(repo_dir: Path, days: int) -> bool:
     Returns:
         True if the repo was used within the specified number of days, False otherwise.
     """
-    marker = repo_dir / constants.filenames.REPO_USED
+    marker = repo_pod_dir / constants.filenames.REPO_USED
     try:
         last_used = marker.stat().st_mtime
         return (time.time() - last_used) < days * 86400
@@ -34,7 +34,7 @@ def was_used_within(repo_dir: Path, days: int) -> bool:
         return False  # treat as stale
 
 
-def clean_all_repos(
+def remove_all_repos(
     config: GitCacheConfig,
     unused_in: Optional[int] = None,
 ) -> bool:
@@ -48,60 +48,36 @@ def clean_all_repos(
         True if all repo were cleaned successfully, False otherwise.
     """
     logger.debug("refreshing all cached repos")
-    repos_dir = config.base_path / constants.filenames.REPOS_DIR
+    repos_dir = config.root_dir / constants.filenames.REPOS_DIR
     paths = repos_dir.glob("*/")
     res = True
     for path in paths:
-        if not clean_repo(path, config.lock_wait_timeout, config.use_lock, unused_in):
+        if not remove_repo_pod_dir(path, config.lock_wait_timeout, config.use_lock, unused_in):
             res = False
 
     return res
 
 
-def clean_repo(
-    repo_dir: Path,
+def remove_repo_pod_dir(
+    repo_pod_dir: Path,
     wait_timeout: int = -1,
     use_lock: bool = True,
     unused_in: Optional[int] = None,
 ) -> bool:
-    if not repo_dir.is_dir():
+    if not repo_pod_dir.is_dir():
         return True
+    if unused_in is not None and was_used_within(repo_pod_dir, unused_in):
+        return True
+
     lock = FileLock(
-        repo_dir / constants.filenames.REPO_LOCK if use_lock else None,
+        repo_pod_dir / constants.filenames.REPO_LOCK if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
         check_exists_on_release=False,
     )
     with lock:
-        if unused_in is None or not was_used_within(repo_dir, unused_in):
-            return remove_repo_dir(repo_dir)
-
-    return True
-
-
-def remove_repo_dir(repo_dir: Path) -> bool:
-    """Removes a repo directory.
-
-    Args:
-        repo_dir: The repo directory to remove.
-
-    Returns:
-        True if the repo directory was removed successfully, False otherwise.
-    """
-    logger.debug(f"removing {repo_dir}")
-    try:
-        # This might be unnecessary to do in two calls but if the
-        # lock file is deleted first and remade by another process, then in theory
-        # there could be a git clone and rmtree operation happening at the same time.
-        # remove the git dir first just to be safe
-        clone_dir = repo_dir / constants.filenames.CLONE_DIR
-        if clone_dir.exists():
-            shutil.rmtree(clone_dir)
-        if repo_dir.exists():
-            shutil.rmtree(repo_dir)
-    except OSError as ex:
-        logger.warning(f"Failed to remove cache entry: {ex}")
-        return False
+        if unused_in is None or not was_used_within(repo_pod_dir, unused_in):
+            return _remove_pod_from_disk(repo_pod_dir)
 
     return True
 
@@ -125,7 +101,7 @@ def check_arguments(clean_all: bool, unused_for: Optional[int], uri: Optional[st
 
 def main(
     config: GitCacheConfig,
-    clean_all: bool = False,
+    all: bool = False,
     uri: Optional[str] = None,
     unused_for: Optional[int] = None,
 ) -> bool:
@@ -140,17 +116,17 @@ def main(
     Returns:
         0 if the caches were cleaned successfully, 1 otherwise.
     """
-    check_arguments(clean_all, unused_for, uri)
+    check_arguments(all, unused_for, uri)
 
-    if clean_all:
-        return clean_all_repos(config, unused_for)
+    if all:
+        return remove_all_repos(config, unused_for)
 
     if uri:
-        repo_dir = get_repo_dir(config.base_path, uri)
+        repo_dir = get_repo_pod_dir(config.root_dir, uri)
         if not repo_dir.is_dir():
             logger.info(f"Repo {uri} not cached")
             return True
-        return clean_repo(repo_dir, config.lock_wait_timeout, config.use_lock, unused_for)
+        return remove_repo_pod_dir(repo_dir, config.lock_wait_timeout, config.use_lock, unused_for)
 
     assert False, "Should not reach here"
 
@@ -161,7 +137,7 @@ def add_clean_options_group(parser: argparse.ArgumentParser):
     Args:
         parser: The argument parser to add options to.
     """
-    clean_options_group = parser.add_argument_group("Clean options")
+    clean_options_group = parser.add_argument_group("clean options")
     clean_options_group.add_argument(
         "--all",
         action="store_true",
@@ -183,7 +159,7 @@ def create_clean_subparser(subparsers, parents) -> argparse.ArgumentParser:
     """
     parser = subparsers.add_parser(
         "clean",
-        help="Clean cache",
+        help="clean cache",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=parents,
@@ -208,7 +184,7 @@ def cli_main(
     logger.debug("running clean subcommand")
 
     if extra_args:
-        parser.error(f"Unknown option '{extra_args[0]}'")
+        parser.error(f"unknown option '{extra_args[0]}'")
 
     # check arguments before calling main so that we can isolate ValueErrors
     try:
@@ -222,7 +198,7 @@ def cli_main(
         0
         if main(
             config=config,
-            clean_all=args.all,
+            all=args.all,
             uri=args.uri,
             unused_for=args.unused_for,
         )

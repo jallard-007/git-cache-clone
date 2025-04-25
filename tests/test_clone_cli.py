@@ -4,7 +4,6 @@ from unittest import mock
 
 import pytest
 
-import git_cache_clone.constants as constants
 from git_cache_clone.commands.clone import cli_main, create_clone_subparser
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.program_arguments import (
@@ -34,7 +33,7 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,base_path,timeout,use_lock,dest,refresh,clone_mode,clone_only,no_retry,extra_args",
+    "uri,root_dir,timeout,use_lock,dest,extra_args",
     [
         (
             "some.uri",
@@ -42,38 +41,27 @@ def test_cli_missing_uri(patched_parser):
             10,
             True,
             None,
-            True,
-            "mirror",
-            False,
-            True,
             ["--some-arg"],
         ),
-        ("uri.some", "cache/path", -1, False, "clone_dest", False, "bare", True, False, []),
+        ("uri.some", "cache/path", -1, False, "clone_dest", []),
     ],
 )
 def test_cli_args(
     patched_parser,
     uri: str,
-    base_path: Optional[str],
+    root_dir: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     dest: Optional[str],
-    refresh: bool,
-    clone_mode: Optional[str],
-    clone_only: bool,
-    no_retry: bool,
     extra_args: List[str],
 ):
     args = [uri]
     if dest:
         args.append(dest)
     args += extra_args
-    if base_path:
-        args.append("--base-path")
-        args.append(base_path)
-    if clone_mode:
-        args.append("--clone-mode")
-        args.append(clone_mode)
+    if root_dir:
+        args.append("--root-dir")
+        args.append(root_dir)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))
@@ -81,12 +69,6 @@ def test_cli_args(
         args.append("--use-lock")
     else:
         args.append("--no-use-lock")
-    if no_retry:
-        args.append("--no-retry")
-    if clone_only:
-        args.append("--clone-only")
-    if refresh:
-        args.append("--refresh")
 
     parsed_args, unknown_args = patched_parser.parse_known_args(
         args, namespace=CLIArgumentNamespace()
@@ -99,10 +81,6 @@ def test_cli_args(
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
-            clone_mode=clone_mode or constants.defaults.CLONE_MODE,
-            should_refresh=refresh,
             dest=dest,
-            git_clone_args=extra_args,
-            clone_only=clone_only,
-            no_retry=no_retry,
+            clone_args=extra_args,
         )

@@ -7,7 +7,7 @@ import os
 import sys
 from typing import Optional, Union
 
-from git_cache_clone.utils import timeout_guard
+from git_cache_clone.utils.misc import timeout_guard
 
 logger = logging.getLogger(__name__)
 

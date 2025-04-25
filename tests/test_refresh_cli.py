@@ -33,7 +33,7 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,base_path,timeout,use_lock,all,extra_options",
+    "uri,root_dir,timeout,use_lock,all,extra_options",
     [
         ("uri", "cache/base/path", 10, True, True, []),
         ("uri.some", "cache/path", -1, False, False, []),
@@ -42,7 +42,7 @@ def test_cli_missing_uri(patched_parser):
 def test_cli_args(
     patched_parser,
     uri: str,
-    base_path: Optional[str],
+    root_dir: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     all: bool,
@@ -51,9 +51,9 @@ def test_cli_args(
     args = [uri]
     if extra_options:
         args += extra_options
-    if base_path:
-        args.append("--base-path")
-        args.append(base_path)
+    if root_dir:
+        args.append("--root-dir")
+        args.append(root_dir)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))
@@ -77,6 +77,6 @@ def test_cli_args(
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
-            refresh_all=all,
-            git_fetch_args=extra_options,
+            all=all,
+            fetch_args=extra_options,
         )

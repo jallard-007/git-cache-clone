@@ -4,7 +4,7 @@ REPO_LOCK = ".git-cache-lock"
 REPO_USED = ".git-cache-used"
 """Marker for cache last used"""
 
-CLONE_DIR = "git"
+REPO_DIR = "git"
 """Name of clone directory in a repo dir"""
 
 REPOS_DIR = "repos"

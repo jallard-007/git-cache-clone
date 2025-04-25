@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 
 import git_cache_clone.constants as constants
-from git_cache_clone.main import main
+from git_cache_clone.cli_main import main
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
 

@@ -1,6 +1,6 @@
 __pycache__
 .vscode/
-.venv/
+# venv/
 dist/
 poetry.lock
 .coverage
