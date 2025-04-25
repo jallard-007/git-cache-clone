@@ -4,8 +4,8 @@ import argparse
 import logging
 from typing import List, Optional
 
-import git_cache_clone.constants as constants
 import git_cache_clone.constants.defaults as defaults
+import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.file_lock import FileLock, make_lock_file
 from git_cache_clone.program_arguments import CLIArgumentNamespace
@@ -37,17 +37,17 @@ def add_to_cache(
     # Ensure parent dirs
     repo_pod_dir.mkdir(parents=True, exist_ok=True)
 
-    clone_dir = repo_pod_dir / constants.filenames.REPO_DIR
+    clone_dir = repo_pod_dir / filenames.REPO_DIR
 
     if clone_dir.exists():
         logger.debug("cache already exists")
         return True
 
     if config.use_lock:
-        make_lock_file(repo_pod_dir / constants.filenames.REPO_LOCK)
+        make_lock_file(repo_pod_dir / filenames.REPO_LOCK)
 
     lock = FileLock(
-        repo_pod_dir / constants.filenames.REPO_LOCK if config.use_lock else None,
+        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
         shared=False,
         wait_timeout=config.lock_wait_timeout,
     )
@@ -82,19 +82,15 @@ def main(
     Args:
         config:
         uri: The URI of the repository to cache.
-        should_refresh: Whether to refresh the cache if it already exists. Defaults to False.
         clone_args: options to forward to the 'git clone' call
 
     Returns:
         True if the repository was successfully cached, False otherwise.
     """
-    return (
-        add_to_cache(
-            config=config,
-            uri=uri,
-            clone_args=clone_args,
-        )
-        is not None
+    return add_to_cache(
+        config=config,
+        uri=uri,
+        clone_args=clone_args,
     )
 
 
@@ -122,13 +118,6 @@ def add_cache_options_group(parser: argparse.ArgumentParser):
     )
     cache_options_group.set_defaults(
         clone_mode=get_clone_mode_from_git_config() or defaults.CLONE_MODE
-    )
-
-    cache_options_group.add_argument(
-        "-r",
-        "--refresh",
-        action="store_true",
-        help="refresh the repository if it already exists",
     )
 
 

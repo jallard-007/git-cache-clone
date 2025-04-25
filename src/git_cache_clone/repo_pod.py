@@ -2,7 +2,7 @@ import logging
 import shutil
 from pathlib import Path
 
-import git_cache_clone.constants as constants
+import git_cache_clone.constants.filenames as filenames
 
 logger = logging.getLogger(__name__)
 
@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 class RepoPod:
     def __init__(self, pod_dir: Path):
         self._pod_dir = pod_dir
-        self._repo_dir = pod_dir / constants.filenames.REPO_DIR
-        self._lock_file_path = pod_dir / constants.filenames.REPO_LOCK
-        self._last_used_file_path = pod_dir / constants.filenames.REPO_LOCK
+        self._repo_dir = pod_dir / filenames.REPO_DIR
+        self._lock_file_path = pod_dir / filenames.REPO_LOCK
+        self._last_used_file_path = pod_dir / filenames.REPO_LOCK
 
     @property
     def pod_dir(self) -> Path:
@@ -46,7 +46,7 @@ def remove_pod_from_disk(repo_pod_dir: Path) -> bool:
         # lock file is deleted first and remade by another process, then in theory
         # there could be a git clone and rmtree operation happening at the same time.
         # remove the git dir first just to be safe
-        repo_dir = repo_pod_dir / constants.filenames.REPO_DIR
+        repo_dir = repo_pod_dir / filenames.REPO_DIR
         if repo_dir.exists():
             shutil.rmtree(repo_dir)
         if repo_pod_dir.exists():

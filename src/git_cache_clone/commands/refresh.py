@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-import git_cache_clone.constants as constants
+import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.file_lock import FileLock
 from git_cache_clone.program_arguments import CLIArgumentNamespace
@@ -28,12 +28,18 @@ def refresh_all_repos(
         True if all caches were refreshed successfully, False otherwise.
     """
     logger.debug("refreshing all cached repos")
-    repos_dir = config.root_dir / constants.filenames.REPOS_DIR
+    repos_dir = config.root_dir / filenames.REPOS_DIR
     paths = repos_dir.glob("*/")
     status = True
     for path in paths:
-        if (path / constants.filenames.REPO_DIR).exists():
-            if not refresh_repo(path, config.lock_wait_timeout, config.use_lock, git_fetch_args):
+        if (path / filenames.REPO_DIR).exists():
+            try:
+                if not refresh_repo(
+                    path, config.lock_wait_timeout, config.use_lock, git_fetch_args
+                ):
+                    status = False
+            except InterruptedError:
+                logger.warning("timeout hit while waiting for lock")
                 status = False
     return status
 
@@ -55,14 +61,14 @@ def refresh_repo(
     Returns:
         True if the repo was refreshed successfully, False otherwise.
     """
-    repo_dir = repo_pod_dir / constants.filenames.REPO_DIR
+    repo_dir = repo_pod_dir / filenames.REPO_DIR
     logger.debug(f"refreshing {repo_dir}")
     if not repo_dir.exists():
         logger.warning("Repo not in cache")
         return False
 
     lock = FileLock(
-        repo_pod_dir / constants.filenames.REPO_LOCK if use_lock else None,
+        repo_pod_dir / filenames.REPO_LOCK if use_lock else None,
         shared=False,
         wait_timeout=wait_timeout,
     )
@@ -116,7 +122,11 @@ def main(
         if not repo_pod_dir.is_dir():
             logger.info(f"Repo {uri} not cached")
             return True
-        return refresh_repo(repo_pod_dir, config.lock_wait_timeout, config.use_lock, fetch_args)
+        try:
+            return refresh_repo(repo_pod_dir, config.lock_wait_timeout, config.use_lock, fetch_args)
+        except InterruptedError:
+            logger.warning("timeout hit while waiting for lock")
+            return False
 
     assert False, "Should not reach here"
 
@@ -180,9 +190,13 @@ def cli_main(
     git_fetch_args += ["--verbose"] * args.verbose
     git_fetch_args += ["--quiet"] * args.quiet
 
-    return main(
-        config=config,
-        all=args.all,
-        uri=args.uri,
-        fetch_args=git_fetch_args,
+    return (
+        0
+        if main(
+            config=config,
+            all=args.all,
+            uri=args.uri,
+            fetch_args=git_fetch_args,
+        )
+        else 1
     )

@@ -37,18 +37,6 @@ def reference_clone(
         logger.debug("repository directory does not exist!")
         return False
 
-    clone_args_ = [
-        "--reference",
-        str(clone_dir),
-        uri,
-    ]
-    if dest:
-        clone_args_.append(dest)
-
-    if clone_args is None:
-        clone_args = []
-    clone_args = clone_args_ + clone_args
-
     # shared lock for read action
     lock = FileLock(
         repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
@@ -57,7 +45,24 @@ def reference_clone(
         retry_on_missing=False,
     )
     with lock:
+        if not clone_dir.is_dir():
+            logger.debug("repository directory does not exist!")
+            return False
+
         mark_repo_used(repo_pod_dir)
+
+        clone_args_ = [
+            "--reference",
+            str(clone_dir),
+            uri,
+        ]
+        if dest:
+            clone_args_.append(dest)
+
+        if clone_args is None:
+            clone_args = []
+        clone_args = clone_args_ + clone_args
+
         res = run_git_command(command="clone", command_args=clone_args)
         return res == 0
 
@@ -87,7 +92,7 @@ def main(
             clone_args=clone_args,
         )
     except InterruptedError:
-        logger.info("Timeout hit while waiting for lock")
+        logger.warning("timeout hit while waiting for lock")
         return False
 
 

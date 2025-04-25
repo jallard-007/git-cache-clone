@@ -65,7 +65,7 @@ Some options can also be configured using git config:
 git config --global key value
 ```
 
-- Base path: `cacheclone.basepath`
+- Root dir: `cacheclone.rootdir`
 
 - Clone mode: `cacheclone.clonemode` ("bare" or "mirror")
 
