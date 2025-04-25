@@ -14,7 +14,7 @@ import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
 import git_cache_clone.constants as constants
-from git_cache_clone.logging import InfoStrippingFormatter, compute_log_level
+from git_cache_clone.logging import compute_log_level, configure_logger
 from git_cache_clone.program_arguments import (
     CLIArgumentNamespace,
     DefaultSubcommandArgParse,
@@ -27,31 +27,20 @@ logger = logging.getLogger(__name__)
 """
 Some terminology:
 
-- base path
-    base directory for all git-cache-clone files
-    contains top level file (repos dir, database)
+- root dir
+    the root directory for all git-cache-clone files.
+    contains shared files relevant to all repositories (e.g., metadata database, repos dir).
 
-- repos dir or cache dir
-    directory where all cached repos go
+- repos dir
+    directory that holds all repo pod directories. <root dir>/REPOS_DIR_NAME
 
-- repo dir 
-    directory where a specific repo is cached (repos dir + normalized and flattened uri).
-    contains files relevant to that specific repo (clone dir, lock file)
+- repo pod dir / pod dir
+    named using the normalized and flattened URI of the repository.
+    contains files specific to that repository (e.g., lock file, repo dir).
 
-- clone dir
-    directory in a repo dir where the repo is actually cloned (repo dir + CLONE_DIR_NAME)
+- repo dir
+    located at: <repo pod dir>/<REPO_DIR_NAME>
 """
-
-
-def configure_logger(level):
-    handler = logging.StreamHandler(sys.stderr)
-    formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
-    handler.setFormatter(formatter)
-    package_logger = logging.getLogger(__name__.split(".")[0])
-    package_logger.handlers.clear()
-    package_logger.addHandler(handler)
-    package_logger.setLevel(level)
-    package_logger.propagate = False
 
 
 def main(args: Optional[List[str]] = None) -> int:

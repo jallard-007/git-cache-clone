@@ -31,11 +31,11 @@ def test_cli_extra_args(patched_parser):
     extra_option = "--some-extra-option"
     with pytest.raises(SystemExit):
         cli_main(patched_parser, parsed_args, [extra_option])
-    patched_parser.error.assert_called_once_with(f"Unknown option '{extra_option}'")
+    patched_parser.error.assert_called_once_with(f"unknown option '{extra_option}'")
 
 
 @pytest.mark.parametrize(
-    "uri,base_path,timeout,use_lock,all,unused_for",
+    "uri,root_dir,timeout,use_lock,all,unused_for",
     [
         ("uri", "cache/base/path", 10, True, True, 10),
         ("uri.some", "cache/path", -1, False, False, 15),
@@ -44,16 +44,16 @@ def test_cli_extra_args(patched_parser):
 def test_cli_args(
     patched_parser,
     uri: str,
-    base_path: Optional[str],
+    root_dir: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
     all: bool,
     unused_for: Optional[int],
 ):
     args = [uri]
-    if base_path:
-        args.append("--base-path")
-        args.append(base_path)
+    if root_dir:
+        args.append("--root-dir")
+        args.append(root_dir)
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))
@@ -77,5 +77,5 @@ def test_cli_args(
             config=config,
             uri=uri,
             unused_for=unused_for,
-            clean_all=all,
+            all=all,
         )

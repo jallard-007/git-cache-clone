@@ -4,7 +4,6 @@ from unittest import mock
 
 import pytest
 
-import git_cache_clone.constants as constants
 from git_cache_clone.commands.add import cli_main, create_add_subparser
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.program_arguments import (
@@ -34,31 +33,28 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    "uri,base_path,clone_mode,timeout,use_lock,refresh,extra_options",
+    "uri,root_dir,clone_mode,timeout,use_lock,extra_options",
     [
-        ("some.uri", "cache/base/path", "mirror", 10, True, True, []),
-        ("uri.some", "cache/path", "bare", -1, False, False, []),
+        ("some.uri", "cache/base/path", "mirror", 10, True, []),
+        ("uri.some", "cache/path", "bare", -1, False, []),
     ],
 )
 def test_cli_args(
     patched_parser,
     uri: str,
-    base_path: Optional[str],
+    root_dir: Optional[str],
     clone_mode: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
-    refresh: bool,
     extra_options: List[str],
 ):
     args = [uri]
     if extra_options:
         args += extra_options
-    if base_path:
-        args.append("--base-path")
-        args.append(base_path)
-    if clone_mode:
-        args.append("--clone-mode")
-        args.append(clone_mode)
+    if root_dir:
+        args.append("--root-dir")
+        args.append(root_dir)
+    args.append(f"--{clone_mode}")
     if timeout is not None:
         args.append("--lock-timeout")
         args.append(str(timeout))
@@ -66,12 +62,12 @@ def test_cli_args(
         args.append("--use-lock")
     else:
         args.append("--no-use-lock")
-    if refresh:
-        args.append("--refresh")
 
     parsed_args, extra_args = patched_parser.parse_known_args(
         args, namespace=CLIArgumentNamespace()
     )
+
+    extra_options += [f"--{clone_mode}"]
 
     with mock.patch("git_cache_clone.commands.add.main") as mock_func:
         mock_func.return_value = True
@@ -80,7 +76,5 @@ def test_cli_args(
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
-            clone_mode=clone_mode or constants.defaults.CLONE_MODE,
-            should_refresh=refresh,
-            git_clone_args=extra_options,
+            clone_args=extra_options,
         )

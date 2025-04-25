@@ -4,9 +4,9 @@ from typing import Optional
 
 import git_cache_clone.constants.defaults as defaults
 from git_cache_clone.types import CloneMode
-from git_cache_clone.utils import (
-    get_base_path_from_git_config,
+from git_cache_clone.utils.git import (
     get_lock_timeout_from_git_config,
+    get_root_dir_from_git_config,
     get_use_lock_from_git_config,
 )
 
@@ -45,20 +45,18 @@ class CLIArgumentNamespace(argparse.Namespace):
     quiet: int
 
     # config options
-    base_path: str
+    root_dir: str
     use_lock: bool
     lock_timeout: int
 
     uri: Optional[str]
 
     # clone options
-    clone_only: bool
-    no_retry: bool
+    dissociate: bool
     dest: Optional[str]
 
     # add options
     clone_mode: CloneMode
-    refresh: bool
 
     # refresh and clean options
     all: bool
@@ -70,16 +68,17 @@ class CLIArgumentNamespace(argparse.Namespace):
 def get_default_options_parser() -> argparse.ArgumentParser:
     default_options_parser = argparse.ArgumentParser(add_help=False)
     default_options_parser.add_argument(
-        "--base-path",
+        "--root-dir",
         metavar="PATH",
-        default=get_base_path_from_git_config() or defaults.BASE_PATH,
-        help=f"default is '{defaults.BASE_PATH}'",
+        default=get_root_dir_from_git_config() or defaults.ROOT_DIR,
+        help=f"default is '{defaults.ROOT_DIR}'",
     )
-    default_options_parser.add_argument(
+    lock_group = default_options_parser.add_mutually_exclusive_group()
+    lock_group.add_argument(
+        "--use-lock", action="store_true", help="use file locks. default behavior", dest="use_lock"
+    )
+    lock_group.add_argument(
         "--no-use-lock", action="store_false", help="do not use file locks", dest="use_lock"
-    )
-    default_options_parser.add_argument(
-        "--use-lock", action="store_true", help="use file locks", dest="use_lock"
     )
     default_options_parser.set_defaults(
         use_lock=get_use_lock_from_git_config() or defaults.USE_LOCK
@@ -102,13 +101,13 @@ def get_log_level_options_parser() -> argparse.ArgumentParser:
         "--verbose",
         action="count",
         default=0,
-        help="Increase verbosity (can be used multiple times)",
+        help="be more verbose",
     )
     log_level_parser.add_argument(
         "-q",
         "--quiet",
         action="count",
         default=0,
-        help="Decrease verbosity (can be used multiple times)",
+        help="be more quiet",
     )
     return log_level_parser

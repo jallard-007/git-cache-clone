@@ -17,9 +17,9 @@ from git_cache_clone.config import GitCacheConfig
     ],
 )
 def test_git_cache_clean_unused(tmp_path, unused_for):
-    base_path = tmp_path / "cache"
-    base_path.mkdir()
-    cache_dir = base_path / constants.filenames.REPOS_DIR
+    root_dir = tmp_path / "cache"
+    root_dir.mkdir()
+    cache_dir = root_dir / constants.filenames.REPOS_DIR
     cache_dir.mkdir()
     repo_dir = cache_dir / "github.com_temp"
     repo_dir.mkdir()
@@ -31,8 +31,8 @@ def test_git_cache_clean_unused(tmp_path, unused_for):
     last_access_time = 31
     old_time = time.time() - (last_access_time * 87400)
     os.utime(marker, (old_time, old_time))
-    config = GitCacheConfig(base_path)
-    result = clean_main(config, clean_all=True, unused_for=unused_for)
+    config = GitCacheConfig(root_dir)
+    result = clean_main(config, all=True, unused_for=unused_for)
 
     assert result is True
     if unused_for <= last_access_time:
