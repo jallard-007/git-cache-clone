@@ -31,7 +31,7 @@ def reference_clone(
     """
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
     clone_dir = repo_pod_dir / filenames.REPO_DIR
-    logger.debug(f"cache clone using repository at {clone_dir}")
+    logger.debug("cache clone using repository at %s", clone_dir)
     if not clone_dir.is_dir():
         logger.debug("repository directory does not exist!")
         return False

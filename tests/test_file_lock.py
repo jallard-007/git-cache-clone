@@ -21,8 +21,7 @@ def test_acquire_lock_exclusive_blocked(tmp_lock_file):
     fd = acquire_file_lock(tmp_lock_file, shared=False, timeout=0)
 
     with pytest.raises(TimeoutError):
-        fd2 = acquire_file_lock(tmp_lock_file, shared=False, timeout=0)
-        os.close(fd2)
+        os.close(acquire_file_lock(tmp_lock_file, shared=False, timeout=0))
 
     os.close(fd)
 
@@ -33,8 +32,7 @@ def test_acquire_lock_exclusive_blocked2(tmp_lock_file):
 
     # exclusive should still be blocked
     with pytest.raises(TimeoutError):
-        fd2 = acquire_file_lock(tmp_lock_file, shared=False, timeout=0)
-        os.close(fd2)
+        os.close(acquire_file_lock(tmp_lock_file, shared=False, timeout=0))
 
     os.close(fd)
 
@@ -51,8 +49,7 @@ def test_acquire_lock_shared_blocked(tmp_lock_file):
 
     # shared should be blocked by exclusive
     with pytest.raises(TimeoutError):
-        fd2 = acquire_file_lock(tmp_lock_file, shared=True, timeout=0)
-        os.close(fd2)
+        os.close(acquire_file_lock(tmp_lock_file, shared=True, timeout=0))
 
     os.close(fd1)
 
@@ -63,9 +60,10 @@ def test_acquire_lock_file_replaced(tmp_lock_file):
         # delete the file while flock-ing
         os.remove(tmp_lock_file)
 
-    with mock.patch("fcntl.flock", side_effect=modified_flock):
-        with pytest.raises(FileNotFoundError) as e_info:
-            acquire_file_lock(tmp_lock_file)
+    with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(
+        FileNotFoundError
+    ) as e_info:
+        acquire_file_lock(tmp_lock_file)
 
     assert str(e_info.value) == "Lock file removed during lock acquisition"
 
@@ -91,9 +89,10 @@ def test_acquire_lock_file_replaced_w_retries_failed(tmp_lock_file):
         # delete the file while flock-ing
         os.remove(tmp_lock_file)
 
-    with mock.patch("fcntl.flock", side_effect=modified_flock):
-        with pytest.raises(FileNotFoundError) as e_info:
-            acquire_file_lock_with_retries(tmp_lock_file)
+    with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(
+        FileNotFoundError
+    ) as e_info:
+        acquire_file_lock_with_retries(tmp_lock_file)
 
     assert str(e_info.value) == "Lock file removed during lock acquisition"
 
@@ -132,7 +131,7 @@ def test_exclusive_lock_blocks_subprocess(tmp_lock_file):
         import fcntl
         import errno
         import sys
-        lock_path = {repr(str(tmp_lock_file))}
+        lock_path = {str(tmp_lock_file)!r}
         fd = os.open(lock_path, os.O_RDWR)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)

@@ -3,8 +3,8 @@
 import logging
 from typing import List, Optional
 
-import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.constants import filenames
 from git_cache_clone.pod import get_repo_pod_dir, remove_pod_from_disk
 from git_cache_clone.utils import run_git_command
 from git_cache_clone.utils.file_lock import FileLock, make_lock_file
@@ -29,7 +29,7 @@ def add_to_cache(
 
     """
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    logger.debug(f"adding {uri} to cache at {repo_pod_dir}")
+    logger.debug("adding %s to cache at %s", uri, repo_pod_dir)
     # Ensure parent dirs
     repo_pod_dir.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +57,7 @@ def add_to_cache(
         git_args = ["-C", str(repo_pod_dir)]
         if clone_args is None:
             clone_args = []
-        clone_args = [uri] + clone_args
+        clone_args = [uri, *clone_args]
 
         res = run_git_command(git_args, "clone", clone_args)
         if res != 0:

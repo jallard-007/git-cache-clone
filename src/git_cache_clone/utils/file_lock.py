@@ -5,11 +5,22 @@ import fcntl
 import logging
 import os
 import sys
-from typing import Optional, Union
+from types import TracebackType
+from typing import Optional, Type, Union
 
 from git_cache_clone.utils.misc import timeout_guard
 
 logger = logging.getLogger(__name__)
+
+
+class LockWaitTimeoutError(TimeoutError):
+    def __init__(self) -> None:
+        super().__init__("Timed out waiting for lock file")
+
+
+class LockFileRemovedDuringLockError(FileNotFoundError):
+    def __init__(self) -> None:
+        super().__init__("Lock file removed during lock acquisition")
 
 
 class FileLock:
@@ -33,7 +44,7 @@ class FileLock:
         wait_timeout: int = -1,
         check_exists_on_release: bool = True,
         retry_on_missing: bool = True,
-    ):
+    ) -> None:
         """
         Args:
             check_exists_on_release: check that the lock file exists on exit.
@@ -52,13 +63,15 @@ class FileLock:
     def __enter__(self) -> None:
         """
         Acquire the file lock upon entering the context.
-
-        Returns:
-            None
         """
         self.acquire()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         self.release()
 
     def acquire(self) -> None:
@@ -106,11 +119,8 @@ def _acquire_fd_lock(fd: int, shared: bool, timeout: int) -> None:
                       If < 0, wait indefinitely.
                       If 0, try once and fail immediately if not available.
 
-    Returns:
-        None
-
     Raises:
-        TimeoutError: If the lock could not be acquired within the timeout period.
+        LockWaitTimeoutError: If the lock could not be acquired within the timeout period.
         OSError: For other file-related errors (e.g., permission denied, I/O error).
     """
     # set lock type
@@ -123,8 +133,8 @@ def _acquire_fd_lock(fd: int, shared: bool, timeout: int) -> None:
         try:
             fcntl.flock(fd, lock_type)
         except OSError as ex:
-            if ex.errno in [errno.EACCES, errno.EAGAIN]:
-                raise TimeoutError("Timed out waiting for lock file") from ex
+            if ex.errno in {errno.EACCES, errno.EAGAIN}:
+                raise LockWaitTimeoutError from ex
             raise
 
 
@@ -147,20 +157,21 @@ def acquire_file_lock(
         int: A file descriptor for the lock file. The caller is responsible for closing it.
 
     Raises:
-        FileNotFoundError: If the lock file does not exist before / after locking.
+        LockFileRemovedDuringLockError: If the lock file does not exist after locking.
     """
     fd = os.open(lock_path, os.O_RDWR)
-    logger.debug(f"getting lock on {lock_path} (shared = {shared}, timeout = {timeout})")
+    logger.debug("getting lock on %s (shared = %s, timeout = %s)", lock_path, shared, timeout)
     try:
         _acquire_fd_lock(fd, shared, timeout)
         # now that we have acquired the lock, make sure that it still exists
         if os.fstat(fd).st_nlink == 0:
             # if we get here, it likely means that we acquired it after a 'clean' process
-            raise FileNotFoundError("Lock file removed during lock acquisition")
-        return fd
+            raise LockFileRemovedDuringLockError  # noqa: TRY301
     except BaseException:
         os.close(fd)
         raise
+    else:
+        return fd
 
 
 def acquire_file_lock_with_retries(
@@ -176,18 +187,19 @@ def acquire_file_lock_with_retries(
             os.makedirs(os.path.dirname(lock_path), exist_ok=True)
             make_lock_file(lock_path)
 
-    assert caught_ex is not None, "exception must be set"
-    raise caught_ex
+    if caught_ex:
+        raise caught_ex
+    raise RuntimeError
 
 
 def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
     """Safely makes a lock file"""
-    logger.debug(f"creating lock file {lock_path}")
+    logger.debug("creating lock file %s", lock_path)
     try:
         # use os.O_EXCL to ensure only one lock file is created
         os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
     except FileExistsError:
         pass
-    except OSError as ex:
-        logger.error(f"cannot make lock file: {ex}")
+    except OSError:
+        logger.exception("cannot make lock file")
         sys.exit(1)

@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Any
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.constants import defaults
@@ -13,7 +14,7 @@ class GitCacheConfig:
         root_dir: str = defaults.ROOT_DIR,
         use_lock: bool = defaults.USE_LOCK,
         lock_wait_timeout: int = defaults.LOCK_TIMEOUT,
-    ):
+    ) -> None:
         self._root_dir = Path(root_dir)
         self._use_lock = use_lock
         self._lock_wait_timeout = lock_wait_timeout
@@ -34,7 +35,7 @@ class GitCacheConfig:
     def lock_wait_timeout(self) -> int:
         return self._lock_wait_timeout
 
-    def __eq__(self, value):
+    def __eq__(self, value: Any) -> bool:  # noqa: ANN401
         if not isinstance(value, type(self)):
             return False
         return (
