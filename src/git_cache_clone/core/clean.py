@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.constants import filenames
 from git_cache_clone.pod import get_repo_pod_dir
 from git_cache_clone.pod import remove_pod_from_disk as _remove_pod_from_disk
 from git_cache_clone.utils.file_lock import FileLock
@@ -86,26 +86,9 @@ def remove_repo_pod_dir(
     return True
 
 
-def check_arguments(clean_all: bool, unused_for: Optional[int], uri: Optional[str]) -> None:
-    """Validates the arguments for cleaning the cache.
-
-    Args:
-        clean_all: Whether to clean all caches.
-        unused_for: Only clean caches unused for this many days.
-        uri: The URI of the repository to clean.
-
-    Raises:
-        ValueError: If the arguments are invalid.
-    """
-    if unused_for is not None and unused_for < 0:
-        raise ValueError("unused-for must be positive")
-    if not clean_all and not uri:
-        raise ValueError("missing uri")
-
-
 def main(
     config: GitCacheConfig,
-    all: bool = False,
+    clean_all: bool = False,
     uri: Optional[str] = None,
     unused_for: Optional[int] = None,
 ) -> bool:
@@ -120,22 +103,20 @@ def main(
     Returns:
         0 if the caches were cleaned successfully, 1 otherwise.
     """
-    check_arguments(all, unused_for, uri)
-
-    if all:
+    if clean_all:
         return remove_all_repos(config, unused_for)
 
-    if uri:
-        repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-        if not repo_pod_dir.is_dir():
-            logger.info(f"repo {uri} not cached")
-            return True
-        try:
-            return remove_repo_pod_dir(
-                repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for
-            )
-        except InterruptedError:
-            logger.warning("timeout hit while waiting for lock")
-            return False
+    if uri is None:
+        raise ValueError
 
-    assert False, "should not reach here"
+    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
+    if not repo_pod_dir.is_dir():
+        logger.info("repo %s not cached", uri)
+        return True
+    try:
+        return remove_repo_pod_dir(
+            repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for
+        )
+    except InterruptedError:
+        logger.warning("timeout hit while waiting for lock")
+        return False

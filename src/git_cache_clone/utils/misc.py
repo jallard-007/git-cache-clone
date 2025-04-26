@@ -2,6 +2,8 @@ import logging
 import re
 import signal
 from contextlib import contextmanager
+from types import FrameType
+from typing import Generator, NoReturn, Optional
 from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
@@ -69,7 +71,7 @@ def flatten_uri(uri: str) -> str:
 
 
 @contextmanager
-def timeout_guard(seconds: int):
+def timeout_guard(seconds: int) -> Generator[None, None, None]:
     """Timeout manager that raises a TimeoutError after a specified duration.
 
     If the specified duration is less than or equal to 0, this function does nothing.
@@ -87,7 +89,7 @@ def timeout_guard(seconds: int):
         yield
         return
 
-    def timeout_handler(signum, frame):
+    def timeout_handler(signum: int, frame: Optional[FrameType]) -> NoReturn:  # noqa: ARG001
         raise TimeoutError
 
     original_handler = signal.signal(signal.SIGALRM, timeout_handler)

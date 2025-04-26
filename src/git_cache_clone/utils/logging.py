@@ -20,7 +20,7 @@ def decrease_indent():
     _log_indent_state.level = max(0, get_indent() - 1)
 
 
-class log_section:
+class LogSection:
     def __init__(self, title: str, level=logging.DEBUG):
         self.title = title
         self.level = level
@@ -42,7 +42,7 @@ class log_section:
         return wrapper
 
 
-def compute_log_level(verbose_count, quiet_count):
+def compute_log_level(verbose_count: int, quiet_count: int) -> int:
     level_index = 3 + verbose_count - quiet_count
     levels = [
         logging.CRITICAL,  # 0
@@ -50,7 +50,7 @@ def compute_log_level(verbose_count, quiet_count):
         logging.WARNING,  # 2
         logging.INFO,  # 3 (default)
         logging.DEBUG,  # 4
-        logging.TRACE,  # 5
+        logging.TRACE, # type: ignore # 5
     ]
     # Clamp to valid range
     level_index = max(0, min(level_index, len(levels) - 1))
@@ -58,22 +58,21 @@ def compute_log_level(verbose_count, quiet_count):
 
 
 class IndentedFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         indent = "  " * get_indent()
         original = super().format(record)
         return f"{indent}{original}"
 
 
 class InfoStrippingFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         if record.levelno == logging.INFO:
             return f"{record.getMessage()}"
-        else:
-            return super().format(record)
+        return super().format(record)
 
 
 class InfoStrippingAndIndentedFormatter(logging.Formatter):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         indent = "  " * get_indent()
         if record.levelno == logging.INFO:
             orig = f"{record.getMessage()}"
@@ -83,9 +82,9 @@ class InfoStrippingAndIndentedFormatter(logging.Formatter):
         return f"{indent}{orig}"
 
 
-def add_logging_level(level_name: str, level_num: int, method_name: Optional[str] = None):
-    """
-    :FROM SO https://stackoverflow.com/a/35804945/30199726:
+def add_logging_level(level_name: str, level_num: int, method_name: Optional[str] = None) -> None:
+    """:FROM SO https://stackoverflow.com/a/35804945/30199726:
+
     Comprehensively adds a new logging level to the `logging` module and the
     currently configured logging class.
 
@@ -113,11 +112,11 @@ def add_logging_level(level_name: str, level_num: int, method_name: Optional[str
         method_name = level_name.lower()
 
     if hasattr(logging, level_name):
-        raise AttributeError("{} already defined in logging module".format(level_name))
+        raise AttributeError(f"{level_name} already defined in logging module")
     if hasattr(logging, method_name):
-        raise AttributeError("{} already defined in logging module".format(method_name))
+        raise AttributeError(f"{method_name} already defined in logging module")
     if hasattr(logging.getLoggerClass(), method_name):
-        raise AttributeError("{} already defined in logger class".format(method_name))
+        raise AttributeError(f"{method_name} already defined in logger class")
 
     # This method was inspired by the answers to Stack Overflow post
     # http://stackoverflow.com/q/2183233/2988730, especially

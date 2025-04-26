@@ -1,6 +1,6 @@
 import sys
 
-if sys.version_info >= (3, 8):
+if sys.version_info >= (3, 8):  # noqa: UP036
     from typing import Literal
 else:
     from typing_extensions import Literal

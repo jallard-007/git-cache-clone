@@ -20,7 +20,7 @@ def adapt_list(list_: list) -> str:
     return json.dumps(list_)
 
 
-def convert_json(val: bytes) -> Any:
+def convert_json(val: bytes) -> Any:  # noqa: ANN401
     return json.loads(val.decode())
 
 
@@ -45,7 +45,7 @@ _adapters_registered = False
 
 
 def register_adapters_and_converters() -> None:
-    global _adapters_registered
+    global _adapters_registered  # noqa: PLW0603
     if not _adapters_registered:
         sqlite3.register_adapter(PathList, adapt_path_list)
         sqlite3.register_converter("path_list", convert_path_list)

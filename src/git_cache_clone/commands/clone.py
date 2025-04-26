@@ -7,19 +7,19 @@ from typing import List
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.core.clone import main
+from git_cache_clone.utils.cli import non_empty_string
 
 logger = logging.getLogger(__name__)
 
 
-def add_clone_options_group(parser: argparse.ArgumentParser):
+def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
     """Adds clone-related options to the argument parser.
 
     Args:
         parser: The argument parser to add options to.
     """
-    clone_options_group = parser.add_argument_group("clone options")
 
-    dissociate_group = clone_options_group.add_mutually_exclusive_group()
+    dissociate_group = parser.add_mutually_exclusive_group()
     dissociate_group.add_argument(
         "--dissociate",
         action="store_true",
@@ -30,10 +30,11 @@ def add_clone_options_group(parser: argparse.ArgumentParser):
     )
     dissociate_group.set_defaults(dissociate=True)
 
-    clone_options_group.add_argument("dest", nargs="?", help="clone destination")
+    parser.add_argument("uri", type=non_empty_string)
+    parser.add_argument("dest", type=non_empty_string, nargs="?", help="clone destination")
 
 
-def create_clone_subparser(subparsers, parents) -> argparse.ArgumentParser:
+def add_subparser(subparsers, parents: List[argparse.ArgumentParser]) -> argparse.ArgumentParser:  # noqa: ANN001
     """Creates a subparser for the 'clone' command.
 
     Args:
@@ -46,33 +47,28 @@ def create_clone_subparser(subparsers, parents) -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=parents,
     )
-    add_clone_options_group(parser)
+    parser.set_defaults(func=cli_main)
+    add_parser_arguments(parser)
     return parser
 
 
-def cli_main(
-    parser: argparse.ArgumentParser, args: CLIArgumentNamespace, extra_args: List[str]
-) -> int:
+def setup(subparsers, parents: List[argparse.ArgumentParser]) -> None:  # noqa: ANN001
+    add_subparser(subparsers, parents)
+
+
+def cli_main(args: CLIArgumentNamespace) -> int:
     """CLI entry point for the 'clone' command.
 
     Args:
-        parser: The argument parser.
         args: Parsed command-line arguments.
-        extra_args: Additional arguments passed to the command.
 
     Returns:
         Exit code (0 for success, 1 for failure).
     """
+
     logger.debug("running clone subcommand")
 
-    if not args.uri:
-        parser.error("Missing uri")
-
     config = GitCacheConfig.from_cli_namespace(args)
-
-    git_clone_args = extra_args
-    git_clone_args += ["--verbose"] * args.verbose
-    git_clone_args += ["--quiet"] * args.quiet
 
     return (
         0
@@ -80,7 +76,7 @@ def cli_main(
             config=config,
             uri=args.uri,
             dest=args.dest,
-            clone_args=git_clone_args,
+            clone_args=args.forwarded_args,
         )
         else 1
     )

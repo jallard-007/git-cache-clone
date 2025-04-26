@@ -1,6 +1,6 @@
-import git_cache_clone.constants.filenames as filenames
-from git_cache_clone.commands.add import main as add_main
 from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.constants import filenames
+from git_cache_clone.core.add import main as add_main
 
 from .utils import create_empty_git_repo
 

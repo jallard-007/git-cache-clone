@@ -3,9 +3,9 @@ import time
 
 import pytest
 
-import git_cache_clone.constants.filenames as filenames
-from git_cache_clone.commands.clean import main as clean_main
 from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.constants import filenames
+from git_cache_clone.core.clean import main as clean_main
 
 
 @pytest.mark.parametrize(
@@ -32,7 +32,7 @@ def test_git_cache_clean_unused(tmp_path, unused_for):
     old_time = time.time() - (last_access_time * 87400)
     os.utime(marker, (old_time, old_time))
     config = GitCacheConfig(root_dir)
-    result = clean_main(config, all=True, unused_for=unused_for)
+    result = clean_main(config, clean_all=True, unused_for=unused_for)
 
     assert result is True
     if unused_for <= last_access_time:

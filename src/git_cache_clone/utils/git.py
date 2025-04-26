@@ -24,8 +24,8 @@ def run_git_command(
     if command_args:
         git_cmd += command_args
 
-    logger.debug(f"running {' '.join(git_cmd)}")
-    res = subprocess.run(git_cmd)
+    logger.debug("running %s", " ".join(git_cmd))
+    res = subprocess.run(git_cmd, check=False)  # noqa: S603
     return res.returncode
 
 
@@ -34,12 +34,12 @@ _git_config_cache: Optional[Dict[str, str]] = None
 
 
 def _get_git_config() -> Dict[str, str]:
-    global _git_config_cache
+    global _git_config_cache  # noqa: PLW0603
 
     if _git_config_cache is None:
         # Run git config --list and parse into a dictionary
         try:
-            output = subprocess.check_output(["git", "config", "--list"]).decode()
+            output = subprocess.check_output(["git", "config", "--list"]).decode()  # noqa: S607 S603
             _git_config_cache = {}
             for line in output.strip().split("\n"):
                 if "=" in line:
@@ -88,10 +88,10 @@ def get_clone_mode_from_git_config() -> Optional[str]:
         clone_mode = clone_mode.lower()
         if clone_mode in CLONE_MODES:
             return clone_mode
-        else:
-            logger.warning(
-                (f"{key} {clone_mode} not one of {CLONE_MODES}."),
-            )
+
+        logger.warning(
+            ("%s %s not one of %s", key, clone_mode, CLONE_MODES),
+        )
 
     return None
 
@@ -105,7 +105,7 @@ def get_use_lock_from_git_config() -> Optional[bool]:
     use_lock = get_git_config_value(keys.GIT_CONFIG_USE_LOCK)
     if use_lock is None:
         return None
-    return use_lock.lower() in ("true", "1", "y", "yes")
+    return use_lock.lower() in {"true", "1", "y", "yes"}
 
 
 def get_lock_timeout_from_git_config() -> Optional[int]:
@@ -121,5 +121,5 @@ def get_lock_timeout_from_git_config() -> Optional[int]:
     try:
         return int(timeout)
     except ValueError as ex:
-        logger.warning(f"{key}: {ex}")
+        logger.warning("%s: %s", key, ex)
         return None

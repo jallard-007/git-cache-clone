@@ -18,7 +18,7 @@ REPO_METADATA_TABLE_NAME = "repository_metadata"
 
 
 class PathList(list):
-    def __init_subclass__(cls):
+    def __init_subclass__(cls) -> None:
         return super().__init_subclass__()
 
 
@@ -36,7 +36,7 @@ class RepoMetadata:
         clone_time_sec: Optional[float] = None,
         disk_usage_kb: Optional[int] = None,
         potential_dependents: Optional[List[Path]] = None,
-    ):
+    ) -> None:
         # id
         self.normalized_uri = normalized_uri
 
@@ -59,11 +59,11 @@ class RepoMetadata:
         #   (can look at .git/objects/info/alternates to see if it points to cache path)
         self.potential_dependents: Optional[List[Path]] = potential_dependents
         """Typed as List[pathlib.Path], but actually a PathList.
-        This is so that we can set an adapter and converter in sqlite3 
+        This is so that we can set an adapter and converter in sqlite3
         """
 
     @classmethod
-    def from_tuple(cls, t: tuple):
+    def from_tuple(cls, t: tuple) -> "RepoMetadata":
         return cls(
             normalized_uri=t[0],
             repo_dir=t[1],
@@ -95,27 +95,28 @@ class RepoMetadata:
 
     def db_insert(self, conn: sqlite3.Connection) -> None:
         conn.execute(
-            f"INSERT INTO {REPO_METADATA_TABLE_NAME} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (self.normalized_uri,) + self._to_base_iterable(),
+            "INSERT INTO ? VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (REPO_METADATA_TABLE_NAME, self.normalized_uri, *self._to_base_iterable()),
         )
 
     def db_update(self, conn: sqlite3.Connection) -> None:
         conn.execute(
             (
-                f"UPDATE {REPO_METADATA_TABLE_NAME}"
+                "UPDATE ?"
                 " SET repo_dir = ?, added_date = ?, removed_date = ?,"
                 " last_fetched_date = ?, last_pruned_date = ?,"
                 " last_used_date = ?, total_num_used = ?, clone_time_sec = ?,"
                 " disk_usage_kb = ?, potential_dependents = ?"
                 " WHERE normalized_uri = ?;"
             ),
-            self._to_base_iterable() + (self.normalized_uri,),
+            (REPO_METADATA_TABLE_NAME, *self._to_base_iterable(), self.normalized_uri),
         )
 
 
 def create_table(conn: sqlite3.Connection) -> None:
-    conn.execute(f"""
-    CREATE TABLE {REPO_METADATA_TABLE_NAME} (
+    conn.execute(
+        """
+    CREATE TABLE ? (
         normalized_uri TEXT NOT NULL PRIMARY KEY,
         repo_dir path,
         added_date datetime,
@@ -128,17 +129,19 @@ def create_table(conn: sqlite3.Connection) -> None:
         disk_usage_kb INTEGER,
         potential_dependents path_list
     );
-    """)
+    """,
+        (REPO_METADATA_TABLE_NAME,),
+    )
 
 
 def select_all(conn: sqlite3.Connection) -> List[RepoMetadata]:
-    statement = f"SELECT * from {REPO_METADATA_TABLE_NAME};"
-    cur = conn.execute(statement)
+    statement = "SELECT * from ?;"
+    cur = conn.execute(statement, (REPO_METADATA_TABLE_NAME,))
     return [RepoMetadata.from_tuple(x) for x in cur.fetchall()]
 
 
 def select(conn: sqlite3.Connection, normalized_uri: str) -> Optional[RepoMetadata]:
-    statement = f"SELECT * from {REPO_METADATA_TABLE_NAME} WHERE normalized_uri = ?;"
-    args = (normalized_uri,)
+    statement = "SELECT * from ? WHERE normalized_uri = ?;"
+    args = (REPO_METADATA_TABLE_NAME, normalized_uri)
     cur = conn.execute(statement, args)
     return RepoMetadata.from_tuple(cur.fetchone())
