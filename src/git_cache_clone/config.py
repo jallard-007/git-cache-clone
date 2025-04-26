@@ -1,8 +1,8 @@
 import logging
 from pathlib import Path
 
+from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.constants import defaults
-from git_cache_clone.program_arguments import CLIArgumentNamespace
 
 logger = logging.getLogger(__name__)
 

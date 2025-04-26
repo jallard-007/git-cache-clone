@@ -4,13 +4,13 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.commands.add import cli_main, create_add_subparser
-from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.program_arguments import (
+from git_cache_clone.cli_arguments import (
     CLIArgumentNamespace,
     get_default_options_parser,
     get_log_level_options_parser,
 )
+from git_cache_clone.commands.add import cli_main, create_add_subparser
+from git_cache_clone.config import GitCacheConfig
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
 

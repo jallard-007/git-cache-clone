@@ -1,5 +1,4 @@
 import logging
-import sys
 import threading
 from functools import wraps
 from typing import Optional
@@ -7,17 +6,6 @@ from typing import Optional
 # Thread-local indent tracking
 _log_indent_state = threading.local()
 _log_indent_state.level = 0
-
-
-def configure_logger(level):
-    handler = logging.StreamHandler(sys.stderr)
-    formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
-    handler.setFormatter(formatter)
-    package_logger = logging.getLogger(__name__.split(".")[0])
-    package_logger.handlers.clear()
-    package_logger.addHandler(handler)
-    package_logger.setLevel(level)
-    package_logger.propagate = False
 
 
 def get_indent():

@@ -14,13 +14,13 @@ import git_cache_clone.commands.clean as clean
 import git_cache_clone.commands.clone as clone
 import git_cache_clone.commands.refresh as refresh
 import git_cache_clone.constants as constants
-from git_cache_clone.logging import compute_log_level, configure_logger
-from git_cache_clone.program_arguments import (
+from git_cache_clone.cli_arguments import (
     CLIArgumentNamespace,
     DefaultSubcommandArgParse,
     get_default_options_parser,
     get_log_level_options_parser,
 )
+from git_cache_clone.utils.logging import InfoStrippingFormatter, compute_log_level
 
 logger = logging.getLogger(__name__)
 
@@ -84,3 +84,14 @@ def main(args: Optional[List[str]] = None) -> int:
         return refresh.cli_main(refresh_parser, known_args, extra_args)
 
     raise RuntimeError("Unhandled subcommand!")
+
+
+def configure_logger(level):
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
+    handler.setFormatter(formatter)
+    package_logger = logging.getLogger(__name__.split(".")[0])
+    package_logger.handlers.clear()
+    package_logger.addHandler(handler)
+    package_logger.setLevel(level)
+    package_logger.propagate = False

@@ -2,15 +2,12 @@ import logging
 import re
 import signal
 from contextlib import contextmanager
-from pathlib import Path
 from urllib.parse import urlparse, urlunparse
-
-import git_cache_clone.constants.filenames as filenames
 
 logger = logging.getLogger(__name__)
 
 
-def _normalize_git_uri(uri: str) -> str:
+def normalize_git_uri(uri: str) -> str:
     """Normalizes a Git repository URI to a canonical HTTPS form.
 
     Args:
@@ -56,7 +53,7 @@ def _normalize_git_uri(uri: str) -> str:
     return urlunparse(("", netloc, path, "", "", "")).strip("/")
 
 
-def _flatten_uri(uri: str) -> str:
+def flatten_uri(uri: str) -> str:
     """Converts a normalized Git URL to a filesystem directory name.
 
     Args:
@@ -69,31 +66,6 @@ def _flatten_uri(uri: str) -> str:
         github.com/user/repo → github.com_user_repo
     """
     return uri.strip("/").replace("/", "_")
-
-
-def get_repo_pod_dir(root_dir: Path, uri: str) -> Path:
-    """Returns the repo pod for a given uri.
-
-    Args:
-        root_dir: root working dir
-        uri: The URI of the repo.
-
-    Returns:
-        path to repo pod dir.
-    """
-    normalized = _normalize_git_uri(uri)
-    flattened = _flatten_uri(normalized)
-    return root_dir / filenames.REPOS_DIR / flattened
-
-
-def mark_repo_used(repo_pod_dir: Path):
-    """Marks a cache directory as used.
-
-    Args:
-        repo_pod_dir: The repo directory to mark as used.
-    """
-    marker = repo_pod_dir / filenames.REPO_USED
-    marker.touch(exist_ok=True)
 
 
 @contextmanager

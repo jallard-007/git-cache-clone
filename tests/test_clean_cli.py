@@ -4,9 +4,9 @@ from unittest import mock
 
 import pytest
 
+from git_cache_clone.cli_arguments import CLIArgumentNamespace, get_default_options_parser
 from git_cache_clone.commands.clean import cli_main, create_clean_subparser
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.program_arguments import CLIArgumentNamespace, get_default_options_parser
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
 
@@ -23,7 +23,7 @@ def test_cli_missing_uri(patched_parser):
     parsed_args = patched_parser.parse_args([], namespace=CLIArgumentNamespace())
     with pytest.raises(SystemExit):
         cli_main(patched_parser, parsed_args, [])
-    patched_parser.error.assert_called_once_with("Missing uri")
+    patched_parser.error.assert_called_once_with("missing uri")
 
 
 def test_cli_extra_args(patched_parser):

@@ -1,4 +1,4 @@
-import git_cache_clone.filenames as filenames
+import git_cache_clone.constants.filenames as filenames
 from git_cache_clone.commands.add import main as add_main
 from git_cache_clone.config import GitCacheConfig
 

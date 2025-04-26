@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.file_lock import acquire_file_lock, acquire_file_lock_with_retries
+from git_cache_clone.utils.file_lock import acquire_file_lock, acquire_file_lock_with_retries
 from tests.fixtures import tmp_lock_file  # noqa: F401
 
 

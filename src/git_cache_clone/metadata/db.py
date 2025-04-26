@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Tuple
 
-from ..file_lock import FileLock, make_lock_file
+from ..utils.file_lock import FileLock, make_lock_file
 from . import repo
 from .adapters_converters import register_adapters_and_converters
 from .utils import get_utc_naive_datetime_now
