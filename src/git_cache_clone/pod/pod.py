@@ -13,7 +13,7 @@ class Pod:
         self._pod_dir = pod_dir
         self._repo_dir = pod_dir / filenames.REPO_DIR
         self._lock_file_path = pod_dir / filenames.REPO_LOCK
-        self._last_used_file_path = pod_dir / filenames.REPO_LOCK
+        self._last_used_file_path = pod_dir / filenames.REPO_USED
 
     @classmethod
     def from_uri(cls, root_dir: Path, uri: str) -> "Pod":
@@ -36,31 +36,38 @@ class Pod:
         return self._last_used_file_path
 
 
-def remove_pod_from_disk(repo_pod_dir: Path) -> bool:
+def remove_pod_from_disk(repo_pod_dir: Path) -> None:
     """Removes a repo directory.
 
     Args:
         repo_pod_dir: The repo directory to remove.
 
-    Returns:
-        True if the repo directory was removed successfully, False otherwise.
+    Raises:
+        OSError
     """
     logger.debug("removing %s", repo_pod_dir)
+    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    # This might be unnecessary to do in two calls but if the
+    # lock file is deleted first and remade by another process, then in theory
+    # there could be a git clone and rmtree operation happening at the same time.
+    # remove the git dir first just to be safe
+    exception = None
     try:
-        # This might be unnecessary to do in two calls but if the
-        # lock file is deleted first and remade by another process, then in theory
-        # there could be a git clone and rmtree operation happening at the same time.
-        # remove the git dir first just to be safe
-        repo_dir = repo_pod_dir / filenames.REPO_DIR
-        if repo_dir.exists():
-            shutil.rmtree(repo_dir)
-        if repo_pod_dir.exists():
-            shutil.rmtree(repo_pod_dir)
+        shutil.rmtree(repo_dir)
+    except FileNotFoundError:
+        pass
     except OSError as ex:
-        logger.warning("Failed to remove cache entry: %s", ex)
-        return False
+        exception = ex
+    try:
+        shutil.rmtree(repo_pod_dir)
+    except FileNotFoundError:
+        pass
+    except OSError as ex:
+        if exception is None:
+            exception = ex
 
-    return True
+    if exception:
+        raise exception
 
 
 def get_repo_pod_dir(root_dir: Path, uri: str) -> Path:
@@ -85,4 +92,5 @@ def mark_repo_used(repo_pod_dir: Path) -> None:
         repo_pod_dir: The repo directory to mark as used.
     """
     marker = repo_pod_dir / filenames.REPO_USED
+
     marker.touch(exist_ok=True)

@@ -6,4 +6,4 @@ else:
     from typing_extensions import Literal
 
 CloneMode = Literal["bare", "mirror"]
-CLONE_MODES = ["bare", "mirror"]
+CLONE_MODES = {"bare", "mirror"}

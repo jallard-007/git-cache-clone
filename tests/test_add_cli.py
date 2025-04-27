@@ -26,10 +26,10 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    ("uri", "root_dir", "clone_mode", "timeout", "use_lock", "extra_options"),
+    ("uri", "root_dir", "clone_mode", "timeout", "use_lock", "refresh", "extra_options"),
     [
-        ("some.uri", "cache/base/path", "mirror", 10, True, []),
-        ("uri.some", "cache/path", "bare", -1, False, []),
+        ("some.uri", "cache/base/path", "mirror", 10, True, True, []),
+        ("uri.some", "cache/path", "bare", -1, False, False, []),
     ],
 )
 def test_cli_args(
@@ -39,6 +39,7 @@ def test_cli_args(
     clone_mode: Optional[str],
     timeout: Optional[int],
     use_lock: bool,
+    refresh: bool,
     extra_options: List[str],
 ):
     args = [uri]
@@ -56,16 +57,23 @@ def test_cli_args(
     else:
         args.append("--no-use-lock")
 
+    if refresh:
+        args.append("--refresh")
+    else:
+        args.append("--no-refresh")
+
     parsed_args = patched_parser.parse_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.add.main") as mock_func:
-        mock_func.return_value = True
+    with mock.patch("git_cache_clone.commands.add.add_main") as mock_func:
+        mock_func.return_value = None
         cli_main(parsed_args)
         config = GitCacheConfig.from_cli_namespace(parsed_args)
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
             clone_args=extra_options,
+            exist_ok=refresh,
+            refresh_if_exists=refresh,
         )

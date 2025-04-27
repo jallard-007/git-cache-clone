@@ -5,7 +5,7 @@ import pytest
 
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
-from git_cache_clone.core.clean import main as clean_main
+from git_cache_clone.core import clean_main
 
 
 @pytest.mark.parametrize(
@@ -34,7 +34,7 @@ def test_git_cache_clean_unused(tmp_path, unused_for):
     config = GitCacheConfig(root_dir)
     result = clean_main(config, clean_all=True, unused_for=unused_for)
 
-    assert result is True
+    assert result is None
     if unused_for <= last_access_time:
         assert not repo_dir.exists(), "Old cache entry should be deleted"
     else:

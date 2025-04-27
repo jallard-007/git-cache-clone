@@ -63,8 +63,8 @@ def main(args: Optional[List[str]] = None) -> int:
     level = compute_log_level(log_level_options.verbose, log_level_options.quiet)
     configure_logger(level)
 
-    logger.debug("extra args: %s", forwarded_args)
     logger.debug("received args: %s", args)
+    logger.debug("extra args: %s", forwarded_args)
 
     main_parser = DefaultSubcommandArgParse(
         description=__doc__,

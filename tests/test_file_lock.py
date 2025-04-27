@@ -8,7 +8,11 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.utils.file_lock import acquire_file_lock, acquire_file_lock_with_retries
+from git_cache_clone.utils.file_lock import (
+    LockFileRemovedDuringLockError,
+    acquire_file_lock,
+    acquire_file_lock_with_retries,
+)
 from tests.fixtures import tmp_lock_file  # noqa: F401
 
 
@@ -61,11 +65,9 @@ def test_acquire_lock_file_replaced(tmp_lock_file):
         os.remove(tmp_lock_file)
 
     with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(
-        FileNotFoundError
-    ) as e_info:
+        LockFileRemovedDuringLockError
+    ):
         acquire_file_lock(tmp_lock_file)
-
-    assert str(e_info.value) == "Lock file removed during lock acquisition"
 
 
 def test_acquire_lock_file_replaced_w_retries_success(tmp_lock_file):
@@ -90,11 +92,9 @@ def test_acquire_lock_file_replaced_w_retries_failed(tmp_lock_file):
         os.remove(tmp_lock_file)
 
     with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(
-        FileNotFoundError
-    ) as e_info:
+        LockFileRemovedDuringLockError
+    ):
         acquire_file_lock_with_retries(tmp_lock_file)
-
-    assert str(e_info.value) == "Lock file removed during lock acquisition"
 
 
 def test_acquire_lock_file_missing(tmp_path):

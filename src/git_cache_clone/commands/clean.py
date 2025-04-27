@@ -6,8 +6,9 @@ from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.core.clean import main
+from git_cache_clone.core import clean_main
 from git_cache_clone.utils.cli import non_empty_string
+from git_cache_clone.utils.file_lock import LockWaitTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
     )
     which_group.add_argument("uri", type=non_empty_string, nargs="?")
 
-    # TODO: set default
     parser.add_argument(
         "--unused-for",
         type=int,
@@ -73,13 +73,16 @@ def cli_main(
 
     config = GitCacheConfig.from_cli_namespace(args)
 
-    return (
-        0
-        if main(
-            config=config,
-            clean_all=args.all,
-            uri=args.uri,
-            unused_for=args.unused_for,
+    try:
+        err = clean_main(
+            config=config, uri=args.uri, clean_all=args.all, unused_for=args.unused_for
         )
-        else 1
-    )
+    except LockWaitTimeoutError as ex:
+        logger.warning(str(ex))
+        return 1
+
+    if err:
+        logger.warning(str(err))
+        return 1
+
+    return 0
