@@ -50,7 +50,7 @@ def compute_log_level(verbose_count: int, quiet_count: int) -> int:
         logging.WARNING,  # 2
         logging.INFO,  # 3 (default)
         logging.DEBUG,  # 4
-        logging.TRACE, # type: ignore # 5
+        logging.TRACE,  # type: ignore # 5
     ]
     # Clamp to valid range
     level_index = max(0, min(level_index, len(levels) - 1))

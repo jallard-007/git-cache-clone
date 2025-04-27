@@ -4,12 +4,12 @@ import argparse
 import logging
 from typing import List
 
-from git_cache_clone.cli_arguments import CLIArgumentNamespace
+from git_cache_clone.cli_arguments import CLIArgumentNamespace, get_clone_mode_from_git_config
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import defaults
-from git_cache_clone.core.add import main
+from git_cache_clone.core import add_main
 from git_cache_clone.utils.cli import non_empty_string
-from git_cache_clone.utils.git import get_clone_mode_from_git_config
+from git_cache_clone.utils.file_lock import LockWaitTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,20 @@ def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
         help="create a mirror repository (implies bare)",
     )
     parser.set_defaults(clone_mode=get_clone_mode_from_git_config() or defaults.CLONE_MODE)
+
+    refresh_group = parser.add_mutually_exclusive_group()
+    refresh_group.add_argument(
+        "--refresh",
+        action="store_true",
+        help="refresh the cached repository if it exists.",
+    )
+    refresh_group.add_argument(
+        "--no-refresh",
+        action="store_false",
+        dest="refresh",
+        help="don't refresh the cached repository. default behavior.",
+    )
+    refresh_group.set_defaults(refresh=False)
 
     parser.add_argument("uri", type=non_empty_string)
 
@@ -76,12 +90,23 @@ def cli_main(args: CLIArgumentNamespace) -> int:
 
     config = GitCacheConfig.from_cli_namespace(args)
 
-    return (
-        0
-        if main(
+    if not args.uri:
+        raise ValueError
+
+    try:
+        err = add_main(
             config=config,
             uri=args.uri,
             clone_args=args.forwarded_args,
+            exist_ok=args.refresh,
+            refresh_if_exists=args.refresh,
         )
-        else 1
-    )
+    except LockWaitTimeoutError as ex:
+        logger.warning(str(ex))
+        return 1
+
+    if err:
+        logger.warning(str(err))
+        return 1
+
+    return 0

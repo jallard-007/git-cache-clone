@@ -12,6 +12,7 @@ from git_cache_clone.cli_arguments import (
 from git_cache_clone.commands.refresh import add_subparser, cli_main
 from git_cache_clone.config import GitCacheConfig
 from tests.fixtures import patch_get_git_config  # noqa: F401
+from tests.utils import craft_options
 
 
 @pytest.fixture
@@ -32,10 +33,10 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    ("uri", "root_dir", "timeout", "use_lock", "refresh_all", "extra_options"),
+    ("uri", "root_dir", "timeout", "use_lock", "refresh_all", "add", "extra_options"),
     [
-        (None, "cache/base/path", 10, True, True, []),
-        ("uri.some", "cache/path", -1, False, False, []),
+        (None, "cache/base/path", 10, True, True, False, []),
+        ("uri.some", "cache/path", -1, False, False, True, []),
     ],
 )
 def test_cli_args(
@@ -45,22 +46,19 @@ def test_cli_args(
     timeout: Optional[int],
     use_lock: bool,
     refresh_all: bool,
+    add: bool,
     extra_options: List[str],
 ):
     args = []
     if uri is not None:
         args = [uri]
 
-    if root_dir:
-        args.extend(("--root-dir", root_dir))
-
-    if timeout is not None:
-        args.extend(("--lock-timeout", str(timeout)))
-
-    if use_lock:
-        args.append("--use-lock")
-    else:
-        args.append("--no-use-lock")
+    args += craft_options(
+        root_dir=root_dir,
+        lock_timeout=timeout,
+        use_lock=use_lock,
+        add=add,
+    )
 
     if refresh_all:
         args.append("--all")
@@ -69,7 +67,7 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.refresh.main") as mock_func:
+    with mock.patch("git_cache_clone.commands.refresh.refresh_main") as mock_func:
         mock_func.return_value = True
         cli_main(parsed_args)
 
@@ -80,4 +78,5 @@ def test_cli_args(
             uri=uri,
             refresh_all=refresh_all,
             fetch_args=extra_options,
+            allow_create=add,
         )

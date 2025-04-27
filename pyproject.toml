@@ -75,10 +75,19 @@ lint.select = [
   "PLW", #i
   "UP", #i
   "FURB", #i
-  # "RUF", #i
-  # "TRY", #i
+  "RUF", #i
+  "TRY", #i
 ]
-lint.ignore = ["E501", "UP015", "PERF203", "ANN002", "ANN003", "LOG015", "PLR0913"]
+lint.ignore = [
+  "E501", 
+  "UP015", 
+  "PERF203", 
+  "ANN002", 
+  "ANN003", 
+  "LOG015", 
+  "PLR0913", 
+  "SIM108",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ANN", "PLR0913", "PLR0917", "ARG", "S"]

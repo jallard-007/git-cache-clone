@@ -4,23 +4,22 @@ import errno
 import fcntl
 import logging
 import os
-import sys
 from types import TracebackType
 from typing import Optional, Type, Union
 
-from git_cache_clone.utils.misc import timeout_guard
+from .misc import timeout_guard
 
 logger = logging.getLogger(__name__)
 
 
 class LockWaitTimeoutError(TimeoutError):
     def __init__(self) -> None:
-        super().__init__("Timed out waiting for lock file")
+        super().__init__("timed out waiting for lock file")
 
 
 class LockFileRemovedDuringLockError(FileNotFoundError):
     def __init__(self) -> None:
-        super().__init__("Lock file removed during lock acquisition")
+        super().__init__("lock file removed during lock acquisition")
 
 
 class FileLock:
@@ -160,32 +159,42 @@ def acquire_file_lock(
         LockFileRemovedDuringLockError: If the lock file does not exist after locking.
     """
     fd = os.open(lock_path, os.O_RDWR)
-    logger.debug("getting lock on %s (shared = %s, timeout = %s)", lock_path, shared, timeout)
+    logger.debug("acquiring lock on %s (shared = %s, timeout = %s)", lock_path, shared, timeout)
     try:
         _acquire_fd_lock(fd, shared, timeout)
-        # now that we have acquired the lock, make sure that it still exists
-        if os.fstat(fd).st_nlink == 0:
-            # if we get here, it likely means that we acquired it after a 'clean' process
-            raise LockFileRemovedDuringLockError  # noqa: TRY301
     except BaseException:
         os.close(fd)
         raise
-    else:
-        return fd
+
+    # now that we have acquired the lock, make sure that it still exists
+    if os.fstat(fd).st_nlink == 0:
+        # if we get here, it likely means that we acquired it after a 'clean' process
+        os.close(fd)
+        raise LockFileRemovedDuringLockError
+
+    return fd
 
 
 def acquire_file_lock_with_retries(
-    lock_path: Union[str, "os.PathLike[str]"], shared: bool = False, timeout: int = -1
+    lock_path: Union[str, "os.PathLike[str]"],
+    shared: bool = False,
+    timeout: int = -1,
+    retry_count: int = 5,
 ) -> int:
+    def create() -> None:
+        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+        make_lock_file(lock_path)
+
     caught_ex = None
-    for _ in range(1, 6):
+    for _ in range(retry_count + 1):
         try:
             return acquire_file_lock(lock_path, shared, timeout)
-        except FileNotFoundError as ex:
+        except LockFileRemovedDuringLockError as ex:
             logger.warning(str(ex))
             caught_ex = ex
-            os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-            make_lock_file(lock_path)
+            create()
+        except FileNotFoundError:
+            create()
 
     if caught_ex:
         raise caught_ex
@@ -202,4 +211,4 @@ def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
         pass
     except OSError:
         logger.exception("cannot make lock file")
-        sys.exit(1)
+        raise

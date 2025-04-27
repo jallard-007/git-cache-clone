@@ -6,7 +6,7 @@ from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.core.clone import main
+from git_cache_clone.core import clone_main
 from git_cache_clone.utils.cli import non_empty_string
 
 logger = logging.getLogger(__name__)
@@ -23,12 +23,54 @@ def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
     dissociate_group.add_argument(
         "--dissociate",
         action="store_true",
-        help="use --reference only while cloning. default behavior",
+        help="use --reference only while cloning. default behavior.",
     )
     dissociate_group.add_argument(
         "--no-dissociate", action="store_false", dest="dissociate", help="do not use --dissociate"
     )
     dissociate_group.set_defaults(dissociate=True)
+
+    add_group = parser.add_mutually_exclusive_group()
+    add_group.add_argument(
+        "--add",
+        action="store_true",
+        help="add the repository to cache if it isn't already. default behavior.",
+    )
+    add_group.add_argument(
+        "--no-add",
+        action="store_false",
+        dest="add",
+        help="do not add the repository to cache.",
+    )
+    add_group.set_defaults(add=True)
+
+    refresh_group = parser.add_mutually_exclusive_group()
+    refresh_group.add_argument(
+        "--refresh",
+        action="store_true",
+        help="refresh the cached repository if it exists.",
+    )
+    refresh_group.add_argument(
+        "--no-refresh",
+        action="store_false",
+        dest="refresh",
+        help="don't refresh the cached repository. default behavior.",
+    )
+    refresh_group.set_defaults(refresh=False)
+
+    retry_group = parser.add_mutually_exclusive_group()
+    retry_group.add_argument(
+        "--retry",
+        action="store_true",
+        help="if the cache clone or reference clone fails, attempt a regular clone. default behavior.",
+    )
+    retry_group.add_argument(
+        "--no-retry",
+        action="store_false",
+        dest="retry",
+        help="if the cache clone or reference clone fails, do not attempt a regular clone.",
+    )
+    retry_group.set_defaults(retry=True)
 
     parser.add_argument("uri", type=non_empty_string)
     parser.add_argument("dest", type=non_empty_string, nargs="?", help="clone destination")
@@ -70,46 +112,19 @@ def cli_main(args: CLIArgumentNamespace) -> int:
 
     config = GitCacheConfig.from_cli_namespace(args)
 
-    return (
-        0
-        if main(
-            config=config,
-            uri=args.uri,
-            dest=args.dest,
-            clone_args=args.forwarded_args,
-        )
-        else 1
-    )
+    if not args.uri:
+        raise ValueError
 
-
-"""
-
-    add_group = clone_options_group.add_mutually_exclusive_group()
-    add_group.add_argument(
-        "--add",
-        action="store_true",
-        help="add to cache. default behavior",
+    err = clone_main(
+        config=config,
+        uri=args.uri,
+        dest=args.dest,
+        clone_args=args.forwarded_args,
+        allow_create=args.add,
+        refresh_if_exists=args.refresh,
+        retry_on_fail=args.retry,
     )
-    add_group.add_argument(
-        "--no-add",
-        action="store_false",
-        dest="add",
-        help="don't add to cache",
-    )
-    add_group.set_defaults(add=True)
-
-    retry_group = clone_options_group.add_mutually_exclusive_group()
-    retry_group.add_argument(
-        "--retry",
-        action="store_true",
-        help="if the cache clone or reference clone fails, attempt a regular clone. default behavior",
-    )
-    retry_group.add_argument(
-        "--no-retry",
-        action="store_false",
-        dest="retry",
-        help="if the cache clone or reference clone fails, do not attempt a regular clone",
-    )
-    retry_group.set_defaults(retry=True)
-
-"""
+    if err:
+        logger.warning(str(err))
+        return 1
+    return 0

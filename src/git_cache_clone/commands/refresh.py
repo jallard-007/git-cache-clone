@@ -6,8 +6,9 @@ from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.core.refresh import main
+from git_cache_clone.core import refresh_main
 from git_cache_clone.utils.cli import non_empty_string
+from git_cache_clone.utils.file_lock import LockWaitTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,20 @@ def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
         help="refresh all cached repos",
     )
     which_group.add_argument("uri", type=non_empty_string, nargs="?")
+
+    add_group = parser.add_mutually_exclusive_group()
+    add_group.add_argument(
+        "--add",
+        action="store_true",
+        help="add the repository to cache if it isn't already.",
+    )
+    add_group.add_argument(
+        "--no-add",
+        action="store_false",
+        dest="add",
+        help="do not add the repository to cache. default behavior.",
+    )
+    add_group.set_defaults(add=False)
 
 
 def add_subparser(subparsers, parents: List[argparse.ArgumentParser]) -> argparse.ArgumentParser:  # noqa: ANN001
@@ -63,13 +78,20 @@ def cli_main(args: CLIArgumentNamespace) -> int:
 
     config = GitCacheConfig.from_cli_namespace(args)
 
-    return (
-        0
-        if main(
+    try:
+        err = refresh_main(
             config=config,
-            refresh_all=args.all,
             uri=args.uri,
+            refresh_all=args.all,
             fetch_args=args.forwarded_args,
+            allow_create=args.add,
         )
-        else 1
-    )
+    except LockWaitTimeoutError as ex:
+        logger.warning(str(ex))
+        return 1
+
+    if err:
+        logger.warning(str(err))
+        return 1
+
+    return 0
