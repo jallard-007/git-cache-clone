@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-from git_cache_clone.config import GitCacheConfig, get_clone_mode
+from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.errors import CacheCloneError, CacheCloneErrorType
 from git_cache_clone.pod import get_repo_pod_dir, mark_repo_used, remove_pod_from_disk
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _add_repo_in_lock(
+    lock: FileLock,
     repo_pod_dir: Path,
     uri: str,
     clone_mode: CloneMode,
@@ -35,6 +36,12 @@ def _add_repo_in_lock(
 
     res = run_git_command(git_args, "clone", our_clone_args)
     if res != 0:
+        lock.check_exists_on_release = False
+        try:
+            remove_pod_from_disk(repo_pod_dir)
+        except Exception as ex:
+            logger.warning("failed to clean up: %s", str(ex))
+
         return CacheCloneError.git_command_failed()
 
     return None
@@ -72,15 +79,7 @@ def add_repo(
         wait_timeout=config.lock_wait_timeout,
     )
     with lock:
-        err = _add_repo_in_lock(repo_pod_dir, uri, config.clone_mode, clone_args)
-        if err and err.error_type == CacheCloneErrorType.GIT_COMMAND_FAILED:
-            lock.check_exists_on_release = False
-            try:
-                remove_pod_from_disk(repo_pod_dir)
-            except Exception as ex:
-                logger.warning("failed to clean up: %s", str(ex))
-
-        return err
+        return _add_repo_in_lock(lock, repo_pod_dir, uri, config.clone_mode, clone_args)
 
 
 def add_main(
@@ -90,18 +89,17 @@ def add_main(
     exist_ok: bool = False,
     refresh_if_exists: bool = False,
 ) -> Optional[CacheCloneError]:
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
-    if repo_dir.exists():
-        if not exist_ok:
-            return CacheCloneError.repo_already_exists(uri)
-        if refresh_if_exists:
-            return refresh_repo(config, uri, fetch_args=None, allow_create=True)
+    err = add_repo(config, uri, clone_args)
+    if not err:
         return None
 
-    err = add_repo(config, uri, clone_args)
-    if err and err.error_type == CacheCloneErrorType.REPO_ALREADY_EXISTS:
+    if err.error_type == CacheCloneErrorType.REPO_ALREADY_EXISTS:
+        if not exist_ok:
+            return err
+        if refresh_if_exists:
+            return refresh_repo(config, uri, fetch_args=None, allow_create=False)
         return None
+
     return err
 
 
@@ -165,14 +163,7 @@ def refresh_repo(
 
         # the repo does not exist and we can create one ...
 
-        err = _add_repo_in_lock(repo_pod_dir, uri, get_clone_mode(), None)
-        if err and err.error_type == CacheCloneErrorType.GIT_COMMAND_FAILED:
-            lock.check_exists_on_release = False
-            try:
-                remove_pod_from_disk(repo_pod_dir)
-            except Exception as ex:
-                logger.warning("failed to clean up: %s", str(ex))
-        return err
+        return _add_repo_in_lock(lock, repo_pod_dir, uri, config.clone_mode, None)
 
 
 def refresh_repo_at_path(
@@ -193,6 +184,7 @@ def refresh_repo_at_path(
         shared=False,
         wait_timeout=config.lock_wait_timeout,
     )
+    # TODO, catch file lock errors and return error code instead
     with lock:
         return _refresh_repo_in_lock(repo_pod_dir, fetch_args)
 
@@ -223,7 +215,7 @@ def refresh_all_repos(
                     fetch_args=git_fetch_args,
                 )
                 if err:
-                    logger.warning(str(err))
+                    logger.warning(err)
 
             except LockWaitTimeoutError:
                 pass
@@ -358,38 +350,30 @@ def clone_main(
     refresh_if_exists: bool = False,
     retry_on_fail: bool = False,
 ) -> Optional[CacheCloneError]:
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    caught_ex: Optional[LockWaitTimeoutError] = None
     err: Optional[CacheCloneError] = None
-    if repo_dir.is_dir() and refresh_if_exists:
-        err = refresh_repo(config, uri, fetch_args=None, allow_create=allow_create)
-    elif not repo_dir.is_dir() and allow_create:
-        err = add_repo(config, uri, None)
-    elif not repo_dir.is_dir():
-        err = CacheCloneError.repo_not_found(uri)
-
-    if err and err.error_type == CacheCloneErrorType.REPO_ALREADY_EXISTS:
-        err = None
-
-    if err:
-        if not retry_on_fail:
-            return err
-
-        logger.warning(str(err))
-        return standard_clone(uri, dest, clone_args)
-
     try:
+        if allow_create:
+            err = add_repo(config, uri, None)
+
+        # only attempt a refresh if we did not just add the repo, and refresh_if_exists is set.
+        # if allow_create is set and err is None, then we just added the repo
+        if refresh_if_exists and not (allow_create and err is None):
+            err = refresh_repo(config, uri, fetch_args=None, allow_create=allow_create)
+            if err:
+                # TODO, need more detailed error msgs
+                logger.warning(err)
+
         err = reference_clone(config, uri, dest, dissociate, clone_args)
     except LockWaitTimeoutError as ex:
-        if retry_on_fail:
-            logger.warning(str(ex))
-            return standard_clone(uri, dest, clone_args)
+        caught_ex = ex
 
-        raise
-
-    if err and retry_on_fail:
-        logger.warning(str(err))
+    if retry_on_fail and (err or caught_ex):
+        logger.warning(str(err or caught_ex))
         return standard_clone(uri, dest, clone_args)
+
+    if caught_ex:
+        raise caught_ex
 
     return err
 
