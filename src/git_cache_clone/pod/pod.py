@@ -45,29 +45,22 @@ def remove_pod_from_disk(repo_pod_dir: Path) -> None:
     Raises:
         OSError
     """
-    logger.debug("removing %s", repo_pod_dir)
     repo_dir = repo_pod_dir / filenames.REPO_DIR
     # This might be unnecessary to do in two calls but if the
     # lock file is deleted first and remade by another process, then in theory
     # there could be a git clone and rmtree operation happening at the same time.
     # remove the git dir first just to be safe
-    exception = None
     try:
         shutil.rmtree(repo_dir)
     except FileNotFoundError:
         pass
-    except OSError as ex:
-        exception = ex
+
     try:
         shutil.rmtree(repo_pod_dir)
     except FileNotFoundError:
         pass
-    except OSError as ex:
-        if exception is None:
-            exception = ex
 
-    if exception:
-        raise exception
+    logger.debug("removed %s", repo_pod_dir)
 
 
 def get_repo_pod_dir(root_dir: Path, uri: str) -> Path:

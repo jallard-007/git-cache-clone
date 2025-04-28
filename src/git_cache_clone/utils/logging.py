@@ -34,9 +34,9 @@ def decrease_indent():
 
 
 class LogSection:
-    def __init__(self, title: str, level=logging.DEBUG):
+    def __init__(self, title: str, level: Optional[int] = None):
         self.title = title
-        self.level = level
+        self.level = level if level is not None else logging.TRACE  # type: ignore
         self.logger = logging.getLogger(__name__)
 
     def __enter__(self):

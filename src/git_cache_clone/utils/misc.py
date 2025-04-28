@@ -44,9 +44,9 @@ def normalize_git_uri(uri: str) -> str:
     if parsed.port:
         netloc += f":{parsed.port}"
 
-    # Normalize casing for host and path
+    # Normalize casing for host. path is case sensitive
     netloc = netloc.lower()
-    path = parsed.path.lower()
+    path = parsed.path
 
     # Remove trailing .git, slashes, and redundant slashes
     path = re.sub(r"/+", "/", path).rstrip("/")
@@ -68,11 +68,11 @@ def flatten_uri(uri: str) -> str:
     Example:
         github.com/user/repo → github.com_user_repo
     """
-    return uri.strip("/").replace("/", "_")
+    return uri.replace("/", "_")
 
 
 @contextmanager
-def timeout_guard(seconds: int) -> Generator[None, None, None]:
+def timeout_guard(seconds: Optional[int]) -> Generator[None, None, None]:
     """Timeout manager that raises a TimeoutError after a specified duration.
 
     If the specified duration is less than or equal to 0, this function does nothing.
@@ -86,7 +86,7 @@ def timeout_guard(seconds: int) -> Generator[None, None, None]:
     Raises:
         TimeoutError: If the timeout duration is exceeded.
     """
-    if seconds <= 0:
+    if seconds is None or seconds <= 0:
         yield
         return
 

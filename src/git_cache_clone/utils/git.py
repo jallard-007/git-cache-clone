@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from typing import Dict, List, Optional
 
 from .logging import get_logger
@@ -10,7 +11,7 @@ def run_git_command(
     git_args: Optional[List[str]] = None,
     command: Optional[str] = None,
     command_args: Optional[List[str]] = None,
-) -> int:
+) -> subprocess.CompletedProcess[bytes]:
     git_cmd = ["git"]
 
     if git_args:
@@ -22,9 +23,8 @@ def run_git_command(
     if command_args:
         git_cmd += command_args
 
-    logger.debug("running %s", " ".join(git_cmd))
-    res = subprocess.run(git_cmd, check=False)  # noqa: S603
-    return res.returncode
+    logger.trace("running '%s'", " ".join(git_cmd))
+    return subprocess.run(git_cmd, check=False)  # noqa: S603
 
 
 # Module-level cache
@@ -63,3 +63,20 @@ def get_git_config_value(key: str) -> Optional[str]:
         The value of the Git configuration key, or None if not found.
     """
     return get_git_config().get(key)
+
+
+def foo(cmd: List[str]) -> subprocess.CompletedProcess[bytes]:
+    """Captures output while still printing to stderr"""
+    output: List[bytes] = []
+    with subprocess.Popen(cmd, stdout=sys.stderr, stderr=subprocess.PIPE) as p:  # noqa: S603
+        try:
+            if p.stderr:
+                for line in iter(p.stderr.readline, b""):
+                    output.append(line)
+                    print(line.decode(), end="", file=sys.stderr)
+            p.communicate()
+        except:
+            p.kill()
+            raise
+
+    return subprocess.CompletedProcess(cmd, p.returncode, stdout=None, stderr=b"\n".join(output))

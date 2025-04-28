@@ -108,7 +108,7 @@ def cli_main(args: CLIArgumentNamespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
 
-    logger.trace("running clone subcommand")
+    logger.debug("running clone subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
 
