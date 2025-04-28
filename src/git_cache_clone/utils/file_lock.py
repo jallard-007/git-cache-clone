@@ -2,22 +2,32 @@
 
 import errno
 import fcntl
-import logging
 import os
 from types import TracebackType
 from typing import Optional, Type, Union
 
+from .logging import get_logger
 from .misc import timeout_guard
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-class LockWaitTimeoutError(TimeoutError):
+class LockError(Exception):
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
+
+
+class LockWaitTimeoutError(TimeoutError, LockError):
     def __init__(self) -> None:
         super().__init__("timed out waiting for lock file")
 
 
-class LockFileRemovedDuringLockError(FileNotFoundError):
+class LockFileNotFoundError(FileNotFoundError, LockError):
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
+
+
+class LockFileRemovedError(LockError):
     def __init__(self) -> None:
         super().__init__("lock file removed during lock acquisition")
 
@@ -42,21 +52,22 @@ class FileLock:
         shared: bool = False,
         wait_timeout: int = -1,
         check_exists_on_release: bool = True,
-        retry_on_missing: bool = True,
+        retry_count: int = 0,
     ) -> None:
         """
         Args:
             check_exists_on_release: check that the lock file exists on exit.
                                      Logs a warning if it isn't.
-            retry_on_missing: Retry acquiring the file lock on FileNotFoundError.
-                              TimeoutErrors and OSErrors are still raised immediately
+            retry_count: Number of times to retry acquiring the file lock on FileNotFoundError.
+                         If this error occurs, both the lock file and required directories are created.
+                         TimeoutErrors and OSErrors are still raised immediately
 
         """
         self.file = file
         self.shared = shared
         self.wait_timeout = wait_timeout
         self.check_exists_on_release = check_exists_on_release
-        self.retry_on_missing = retry_on_missing
+        self.retry_count = retry_count
         self.fd: Optional[int] = None
 
     def __enter__(self) -> None:
@@ -82,9 +93,12 @@ class FileLock:
         if self.file is None or self.fd is not None:
             return
 
-        if self.retry_on_missing:
+        if self.retry_count > 0:
             self.fd = acquire_file_lock_with_retries(
-                self.file, shared=self.shared, timeout=self.wait_timeout
+                self.file,
+                shared=self.shared,
+                timeout=self.wait_timeout,
+                retry_count=self.retry_count,
             )
         else:
             self.fd = acquire_file_lock(self.file, shared=self.shared, timeout=self.wait_timeout)
@@ -96,11 +110,11 @@ class FileLock:
         This method has no effect if the lock is already released.
         """
         if self.fd is not None:
-            logger.debug("releasing lock")
             if self.check_exists_on_release and os.fstat(self.fd).st_nlink == 0:
-                logger.warning("lock file does not exist on lock release")
+                logger.debug("lock file does not exist on lock release")
 
             os.close(self.fd)
+            logger.trace("lock released")
             self.fd = None
 
     def is_acquired(self) -> bool:
@@ -158,10 +172,15 @@ def acquire_file_lock(
     Raises:
         LockFileRemovedDuringLockError: If the lock file does not exist after locking.
     """
-    fd = os.open(lock_path, os.O_RDWR)
-    logger.debug("acquiring lock on %s (shared = %s, timeout = %s)", lock_path, shared, timeout)
+    try:
+        fd = os.open(lock_path, os.O_RDWR)
+    except FileNotFoundError as ex:
+        raise LockFileNotFoundError(ex) from None
+
+    logger.trace("acquiring lock on %s (shared = %s, timeout = %s)", lock_path, shared, timeout)
     try:
         _acquire_fd_lock(fd, shared, timeout)
+        logger.trace("lock acquired")
     except BaseException:
         os.close(fd)
         raise
@@ -170,7 +189,7 @@ def acquire_file_lock(
     if os.fstat(fd).st_nlink == 0:
         # if we get here, it likely means that we acquired it after a 'clean' process
         os.close(fd)
-        raise LockFileRemovedDuringLockError
+        raise LockFileRemovedError
 
     return fd
 
@@ -181,34 +200,28 @@ def acquire_file_lock_with_retries(
     timeout: int = -1,
     retry_count: int = 5,
 ) -> int:
-    def create() -> None:
-        os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-        make_lock_file(lock_path)
-
-    caught_ex = None
+    retry_count = max(retry_count, 0)
     for _ in range(retry_count + 1):
         try:
             return acquire_file_lock(lock_path, shared, timeout)
-        except LockFileRemovedDuringLockError as ex:
-            logger.warning(str(ex))
-            caught_ex = ex
-            create()
-        except FileNotFoundError:
-            create()
+        except (LockFileRemovedError, LockFileNotFoundError) as ex:
+            logger.debug("lock acquisition failed: %s", ex)
+            make_lock_file(lock_path)
 
-    if caught_ex:
-        raise caught_ex
-    raise RuntimeError
+    raise LockFileRemovedError
 
 
 def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
-    """Safely makes a lock file"""
-    logger.debug("creating lock file %s", lock_path)
+    """Safely makes a lock file. Also makes the required directories if needed"""
+    try:
+        lock_dir = os.path.dirname(lock_path)
+        os.makedirs(lock_dir)
+        logger.trace("created directory %s", lock_dir)
+    except FileExistsError:
+        pass
     try:
         # use os.O_EXCL to ensure only one lock file is created
         os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
+        logger.trace("created lock file %s", lock_path)
     except FileExistsError:
         pass
-    except OSError:
-        logger.exception("cannot make lock file")
-        raise

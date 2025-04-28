@@ -11,7 +11,9 @@ from . import repo
 from .adapters_converters import register_adapters_and_converters
 from .utils import get_utc_naive_datetime_now
 
-logger = logging.getLogger(__name__)
+from git_cache_clone.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 DATABASE_MAJOR_VERSION = 1
 DATABASE_MINOR_VERSION = 0
@@ -111,7 +113,7 @@ def open_sqlite_connection(
         lock_file,
         shared=False,
         wait_timeout=wait_timeout,
-        retry_on_missing=False,
+        retry_count=0,
     ):
         conn = sqlite3.connect(db, **connect_kwargs)
         ensure_database_ready(conn)

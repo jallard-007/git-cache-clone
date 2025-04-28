@@ -67,7 +67,7 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.refresh.refresh_main") as mock_func:
+    with mock.patch("git_cache_clone.commands.refresh.refresh") as mock_func:
         mock_func.return_value = True
         cli_main(parsed_args)
 

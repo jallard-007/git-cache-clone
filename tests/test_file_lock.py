@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 from git_cache_clone.utils.file_lock import (
-    LockFileRemovedDuringLockError,
+    LockFileRemovedError,
     acquire_file_lock,
     acquire_file_lock_with_retries,
 )
@@ -64,9 +64,7 @@ def test_acquire_lock_file_replaced(tmp_lock_file):
         # delete the file while flock-ing
         os.remove(tmp_lock_file)
 
-    with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(
-        LockFileRemovedDuringLockError
-    ):
+    with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(LockFileRemovedError):
         acquire_file_lock(tmp_lock_file)
 
 
@@ -91,9 +89,7 @@ def test_acquire_lock_file_replaced_w_retries_failed(tmp_lock_file):
         # delete the file while flock-ing
         os.remove(tmp_lock_file)
 
-    with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(
-        LockFileRemovedDuringLockError
-    ):
+    with mock.patch("fcntl.flock", side_effect=modified_flock), pytest.raises(LockFileRemovedError):
         acquire_file_lock_with_retries(tmp_lock_file)
 
 

@@ -66,7 +66,7 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.add.add_main") as mock_func:
+    with mock.patch("git_cache_clone.commands.add.add") as mock_func:
         mock_func.return_value = None
         cli_main(parsed_args)
         config = GitCacheConfig.from_cli_namespace(parsed_args)
@@ -74,6 +74,5 @@ def test_cli_args(
             config=config,
             uri=uri,
             clone_args=extra_options,
-            exist_ok=refresh,
             refresh_if_exists=refresh,
         )

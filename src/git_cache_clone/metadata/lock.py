@@ -1,6 +1,5 @@
 import getpass
 import json
-import logging
 import os
 import socket
 import tempfile
@@ -8,7 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+from git_cache_clone.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class LockMetadata:

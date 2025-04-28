@@ -1,12 +1,12 @@
 import argparse
-import logging
 from typing import List, Optional
 
 from git_cache_clone.constants import defaults, keys
 from git_cache_clone.types import CLONE_MODES, CloneMode
 from git_cache_clone.utils.git import get_git_config_value
+from git_cache_clone.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DefaultSubcommandArgParse(argparse.ArgumentParser):

@@ -1,15 +1,15 @@
 """clone a repository"""
 
 import argparse
-import logging
 from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.core import clone_main
+from git_cache_clone.core import clone
 from git_cache_clone.utils.cli import non_empty_string
+from git_cache_clone.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
@@ -108,19 +108,19 @@ def cli_main(args: CLIArgumentNamespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
 
-    logger.debug("running clone subcommand")
+    logger.trace("running clone subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
 
     if not args.uri:
         raise ValueError
 
-    err = clone_main(
+    err = clone(
         config=config,
         uri=args.uri,
         dest=args.dest,
         clone_args=args.forwarded_args,
-        allow_create=args.add,
+        allow_add=args.add,
         refresh_if_exists=args.refresh,
         retry_on_fail=args.retry,
     )

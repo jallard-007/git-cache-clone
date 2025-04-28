@@ -1,7 +1,20 @@
 import logging
 import threading
 from functools import wraps
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    # Patch types for static checking
+    class Logger(logging.Logger):
+        def trace(self, msg: Any, *args: Any, **kwargs: Any) -> None: ...
+
+else:
+    Logger = logging.Logger
+
+
+def get_logger(name: Optional[str] = None) -> Logger:
+    return logging.getLogger(name)  # type: ignore
+
 
 # Thread-local indent tracking
 _log_indent_state = threading.local()
@@ -132,3 +145,20 @@ def add_logging_level(level_name: str, level_num: int, method_name: Optional[str
     setattr(logging, level_name, level_num)
     setattr(logging.getLoggerClass(), method_name, log_for_level)
     setattr(logging, method_name, log_to_root)
+
+
+if __name__ == "__main__":
+    import sys
+
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = logging.Formatter(fmt="%(levelname)s: %(message)s")
+    handler.setFormatter(formatter)
+    logger = get_logger(__name__)
+    logger.addHandler(handler)
+    logger.setLevel(logging.TRACE)  # type: ignore
+    logger.trace("trace")
+    logger.debug("debug")
+    logger.info("info")
+    logger.warning("warning")
+    logger.error("error")
+    logger.critical("critical")

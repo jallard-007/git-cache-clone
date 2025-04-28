@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,8 +9,9 @@ from git_cache_clone.cli_arguments import (
     get_use_lock,
 )
 from git_cache_clone.types import CloneMode
+from git_cache_clone.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GitCacheConfig:
