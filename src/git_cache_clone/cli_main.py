@@ -17,7 +17,11 @@ from git_cache_clone.cli_arguments import (
     get_standard_options_parser,
 )
 from git_cache_clone.commands import register_all_commands
-from git_cache_clone.utils.logging import InfoStrippingFormatter, compute_log_level, get_logger
+from git_cache_clone.utils.logging import (
+    IndentedFormatter,
+    compute_log_level,
+    get_logger,
+)
 
 logger = get_logger(__name__)
 
@@ -63,8 +67,7 @@ def main(args: Optional[List[str]] = None) -> int:
     level = compute_log_level(log_level_options.verbose, log_level_options.quiet)
     configure_logger(level)
 
-    logger.trace("received args: %s", args)
-    logger.trace("extra args: %s", forwarded_args)
+    logger.debug("received args: %s", args)
 
     main_parser = DefaultSubcommandArgParse(
         description=__doc__,
@@ -82,14 +85,26 @@ def main(args: Optional[List[str]] = None) -> int:
         our_args, namespace=CLIArgumentNamespace(forwarded_args=forwarded_args)
     )
 
-    logger.trace(parsed_args)
+    logger.debug(parsed_args)
 
-    return parsed_args.func(parsed_args)
+    try:
+        return parsed_args.func(parsed_args)
+    except KeyboardInterrupt:
+        logger.info("stopping; interrupted")
+        return -1
+    except Exception:
+        logger.exception("uncaught exception")
+        return -1
 
 
 def configure_logger(level: int) -> None:
+    formatter: logging.Formatter
+    if level <= logging.TRACE:  # type: ignore
+        formatter = IndentedFormatter(fmt="%(levelname)s: %(message)s")
+    else:
+        formatter = logging.Formatter(fmt="%(levelname)s: %(message)s")
+
     handler = logging.StreamHandler(sys.stderr)
-    formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
     handler.setFormatter(formatter)
     package_logger = get_logger(__name__.split(".")[0])
     package_logger.handlers.clear()

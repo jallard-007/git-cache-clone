@@ -34,8 +34,9 @@ class RepoMetadata:
         last_used_date: Optional[datetime.datetime] = None,
         total_num_used: Optional[int] = None,
         clone_time_sec: Optional[float] = None,
+        avg_ref_clone_time_sec: Optional[float] = None,
         disk_usage_kb: Optional[int] = None,
-        potential_dependents: Optional[List[Path]] = None,
+        potential_dependents: Optional[PathList] = None,
     ) -> None:
         # id
         self.normalized_uri = normalized_uri
@@ -50,6 +51,7 @@ class RepoMetadata:
         self.last_used_date = last_used_date
         self.total_num_used = total_num_used
         self.clone_time_sec = clone_time_sec
+        self.avg_ref_clone_time_sec = avg_ref_clone_time_sec
         self.disk_usage_kb = disk_usage_kb
 
         # point to clones that did not used --dissociate.
@@ -74,8 +76,9 @@ class RepoMetadata:
             last_used_date=t[6],
             total_num_used=t[7],
             clone_time_sec=t[8],
-            disk_usage_kb=t[9],
-            potential_dependents=t[10],
+            avg_ref_clone_time_sec=t[9],
+            disk_usage_kb=t[10],
+            potential_dependents=t[11],
         )
 
     def _to_base_iterable(self) -> tuple:
@@ -89,13 +92,14 @@ class RepoMetadata:
             self.last_used_date,
             self.total_num_used,
             self.clone_time_sec,
+            self.avg_ref_clone_time_sec,
             self.disk_usage_kb,
             self.potential_dependents,
         )
 
     def db_insert(self, conn: sqlite3.Connection) -> None:
         conn.execute(
-            "INSERT INTO ? VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO ? VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (REPO_METADATA_TABLE_NAME, self.normalized_uri, *self._to_base_iterable()),
         )
 
@@ -106,8 +110,8 @@ class RepoMetadata:
                 " SET repo_dir = ?, added_date = ?, removed_date = ?,"
                 " last_fetched_date = ?, last_pruned_date = ?,"
                 " last_used_date = ?, total_num_used = ?, clone_time_sec = ?,"
-                " disk_usage_kb = ?, potential_dependents = ?"
-                " WHERE normalized_uri = ?;"
+                " avg_ref_clone_time_sec = ?, disk_usage_kb = ?,"
+                " potential_dependents = ? WHERE normalized_uri = ?;"
             ),
             (REPO_METADATA_TABLE_NAME, *self._to_base_iterable(), self.normalized_uri),
         )
@@ -126,6 +130,7 @@ def create_table(conn: sqlite3.Connection) -> None:
         last_used_date datetime,
         total_num_used INTEGER,
         clone_time_sec REAL,
+        avg_ref_clone_time_sec REAL,
         disk_usage_kb INTEGER,
         potential_dependents path_list
     );

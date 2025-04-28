@@ -20,17 +20,17 @@ class CacheCloneError:
     @classmethod
     def repo_already_exists(cls, uri: str) -> "CacheCloneError":
         if uri:
-            msg = f"repository {uri} exists"
+            msg = f"repository {uri} already exists in cache"
         else:
-            msg = "repository exists"
+            msg = "repository already exists in cache"
         return cls(CacheCloneErrorType.REPO_ALREADY_EXISTS, msg)
 
     @classmethod
     def repo_not_found(cls, uri: str) -> "CacheCloneError":
         if uri:
-            msg = f"repository {uri} does not exist"
+            msg = f"repository {uri} does not exist in cache"
         else:
-            msg = "repository does not exist"
+            msg = "repository does not exist in cache"
         return cls(CacheCloneErrorType.REPO_NOT_FOUND, msg)
 
     @classmethod
@@ -38,8 +38,11 @@ class CacheCloneError:
         return cls(CacheCloneErrorType.LOCK_WAIT_TIMEOUT, "timed out waiting for lock file")
 
     @classmethod
-    def lock_failed(cls, msg: Optional[str]) -> "CacheCloneError":
-        return cls(CacheCloneErrorType.LOCK_FAILED, msg)
+    def lock_failed(cls, reason: Optional[object]) -> "CacheCloneError":
+        return cls(
+            CacheCloneErrorType.LOCK_FAILED,
+            "could not acquire lock" + (": " + str(reason) if reason else ""),
+        )
 
     @classmethod
     def git_command_failed(cls, msg: Optional[str] = None) -> "CacheCloneError":

@@ -12,9 +12,8 @@ from git_cache_clone.utils.file_lock import (
     FileLock,
     LockError,
     LockFileNotFoundError,
-    make_lock_file,
 )
-from git_cache_clone.utils.logging import get_logger
+from git_cache_clone.utils.logging import LogSection, get_logger
 
 logger = get_logger(__name__)
 
@@ -36,6 +35,8 @@ def _attempt_clone_repo(
     if repo_dir.exists():
         return CacheCloneError.repo_already_exists(uri)
 
+    logger.debug("adding %s to cache at %s", uri, repo_pod_dir)
+
     git_args = ["-C", str(repo_pod_dir)]
 
     our_clone_args = [uri, filenames.REPO_DIR, f"--{clone_mode}"]
@@ -44,7 +45,7 @@ def _attempt_clone_repo(
         our_clone_args += clone_args
 
     res = run_git_command(git_args, "clone", our_clone_args)
-    if res != 0:
+    if res.returncode != 0:
         return CacheCloneError.git_command_failed()
 
     return None
@@ -58,7 +59,12 @@ def _add_or_refresh_locked_repo(
     refresh_if_exists: bool,
 ) -> Optional[CacheCloneError]:
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, clone_args)
+    try:
+        error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, clone_args)
+    except BaseException:
+        _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
+        raise
+
     if error is None:
         return None
 
@@ -94,10 +100,6 @@ def _add_or_refresh_repo(
     if (repo_pod_dir / filenames.REPO_DIR).is_dir():
         return CacheCloneError.repo_already_exists(uri)
 
-    logger.trace("adding %s to cache at %s", uri, repo_pod_dir)
-
-    make_lock_file(repo_pod_dir / filenames.REPO_LOCK)
-
     lock = FileLock(
         repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
         shared=False,
@@ -105,11 +107,13 @@ def _add_or_refresh_repo(
         retry_count=5,
     )
     try:
+        lock.create()
         lock.acquire()
-    except LockError as ex:
-        return CacheCloneError.lock_failed(f"could not acquire lock: {ex!s}")
+    except (LockError, OSError) as ex:
+        return CacheCloneError.lock_failed(ex)
     else:
-        return _add_or_refresh_locked_repo(lock, config, uri, clone_args, refresh_if_exists)
+        with LogSection("add/refresh critical zone"):
+            return _add_or_refresh_locked_repo(lock, config, uri, clone_args, refresh_if_exists)
     finally:
         lock.release()
 
@@ -135,9 +139,11 @@ def _attempt_repo_fetch(
     if not repo_dir.exists():
         return CacheCloneError.repo_not_found("")
 
+    logger.debug("refreshing %s", repo_dir)
+
     git_args = ["-C", str(repo_pod_dir)]
     res = run_git_command(git_args, command="fetch", command_args=fetch_args)
-    if res != 0:
+    if res.returncode != 0:
         return CacheCloneError.git_command_failed()
 
     return None
@@ -159,8 +165,12 @@ def _refresh_or_add_locked_repo(
         return error
 
     # the repo does not exist and we can create one ...
+    try:
+        error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, None)
+    except BaseException:
+        _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
+        raise
 
-    error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, None)
     if error is not None and error.type == CacheCloneErrorType.GIT_COMMAND_FAILED:
         _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
 
@@ -186,11 +196,8 @@ def _refresh_or_add_repo(
     """
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
     repo_dir = repo_pod_dir / filenames.REPO_DIR
-    logger.debug("refreshing %s", repo_dir)
     if not repo_dir.exists() and not allow_add:
         return CacheCloneError.repo_not_found(uri)
-
-    make_lock_file(repo_pod_dir / filenames.REPO_LOCK)
 
     lock = FileLock(
         repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
@@ -199,11 +206,13 @@ def _refresh_or_add_repo(
         retry_count=5,
     )
     try:
+        lock.create()
         lock.acquire()
-    except LockError as ex:
-        return CacheCloneError.lock_failed(f"could not acquire lock: {ex!s}")
+    except (LockError, OSError) as ex:
+        return CacheCloneError.lock_failed(ex)
     else:
-        return _refresh_or_add_locked_repo(lock, config, uri, fetch_args, allow_add)
+        with LogSection("refresh/add critical zone"):
+            return _refresh_or_add_locked_repo(lock, config, uri, fetch_args, allow_add)
     finally:
         lock.release()
 
@@ -217,10 +226,6 @@ def _refresh_repo_at_path(
     if not repo_dir.exists():
         return CacheCloneError.repo_not_found("")
 
-    logger.debug("refreshing %s", repo_dir)
-
-    make_lock_file(repo_pod_dir / filenames.REPO_LOCK)
-
     lock = FileLock(
         repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
         shared=False,
@@ -228,12 +233,13 @@ def _refresh_repo_at_path(
         retry_count=5,
     )
     try:
+        lock.create()
         lock.acquire()
-    except LockError as ex:
-        return CacheCloneError.lock_failed(f"could not acquire lock: {ex!s}")
+    except (LockError, OSError) as ex:
+        return CacheCloneError.lock_failed(ex)
     else:
-        # just use the helper as it only does a fetch, nothing else
-        return _attempt_repo_fetch(repo_pod_dir, fetch_args)
+        with LogSection("refresh at path critical zone"):
+            return _attempt_repo_fetch(repo_pod_dir, fetch_args)
     finally:
         lock.release()
 
@@ -297,6 +303,8 @@ def refresh(
 def _standard_clone(
     uri: str, dest: Optional[str], clone_args: Optional[List[str]]
 ) -> Optional[CacheCloneError]:
+    logger.debug("cloning %s", uri)
+
     clone_args_ = [uri]
     if dest:
         clone_args_.append(dest)
@@ -306,7 +314,10 @@ def _standard_clone(
     clone_args = clone_args_ + clone_args
 
     res = run_git_command(command="clone", command_args=clone_args)
-    if res != 0:
+    if res.returncode != 0:
+        if res.stderr:
+            # print(res.stderr.decode(), end="")
+            pass
         return CacheCloneError.git_command_failed()
     return None
 
@@ -323,25 +334,20 @@ def _attempt_reference_clone(
     if not repo_dir.is_dir():
         return CacheCloneError.repo_not_found(uri)
 
+    logger.debug("cloning with reference to %s", repo_dir)
+
     mark_repo_used(repo_pod_dir)
 
     clone_args_ = [
         "--reference",
         str(repo_dir),
-        uri,
     ]
-    if dest:
-        clone_args_.append(dest)
 
     if dissociate:
         clone_args_.append("--dissociate")
 
     clone_args = clone_args_ if clone_args is None else clone_args_ + clone_args
-
-    res = run_git_command(command="clone", command_args=clone_args)
-    if res != 0:
-        return CacheCloneError.git_command_failed()
-    return None
+    return _standard_clone(uri, dest, clone_args)
 
 
 def _reference_clone(
@@ -366,8 +372,6 @@ def _reference_clone(
         errors of type REPO_NOT_FOUND or GIT_COMMAND_FAILURE, or None
     """
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
-    logger.debug("cache clone using repository at %s", repo_dir)
 
     lock = FileLock(
         repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
@@ -380,16 +384,17 @@ def _reference_clone(
         lock.acquire()
     except LockFileNotFoundError:
         return CacheCloneError.repo_not_found(uri)
-    except LockError as ex:
-        return CacheCloneError.lock_failed(f"could not acquire lock: {ex!s}")
+    except (LockError, OSError) as ex:
+        return CacheCloneError.lock_failed(ex)
     else:
-        return _attempt_reference_clone(
-            repo_pod_dir,
-            uri,
-            dest,
-            dissociate,
-            clone_args,
-        )
+        with LogSection("reference clone critical zone"):
+            return _attempt_reference_clone(
+                repo_pod_dir,
+                uri,
+                dest,
+                dissociate,
+                clone_args,
+            )
     finally:
         lock.release()
 
@@ -409,23 +414,18 @@ def clone(
     if allow_add:
         error = _add_or_refresh_repo(config, uri, None, refresh_if_exists=refresh_if_exists)
 
-    if error is not None and error.type == CacheCloneErrorType.GIT_COMMAND_FAILED:
-        # TODO: check if fatal git error and return early
-        logger.debug("git command failed")
-
     # if allow_create is set and error is None, then we just added the repo
     # only attempt a refresh if we did not just add the repo, and refresh_if_exists is set.
 
     if refresh_if_exists and not (allow_add and error is None):
         error = _refresh_or_add_repo(config, uri, fetch_args=None, allow_add=False)
-        if error and error.type != CacheCloneErrorType.GIT_COMMAND_FAILED:
-            # don't bother logging git failures -- it's already printed
+        if error is not None:
             logger.warning(error)
 
     error = _reference_clone(config, uri, dest, dissociate, clone_args)
 
     if error is not None and retry_on_fail:
-        logger.warning(error)
+        logger.warning("%s -- attempting standard clone", error)
         return _standard_clone(uri, dest, clone_args)
 
     return error
@@ -451,6 +451,7 @@ def _was_used_within(repo_pod_dir: Path, days: int) -> bool:
         last_used = marker.stat().st_mtime
         return (time.time() - last_used) < days * 86400
     except FileNotFoundError:
+        logger.debug("repo-used marker file not found")
         return False  # treat as stale
 
 
@@ -487,9 +488,8 @@ def _remove_repo_pod_dir(
     if not repo_pod_dir.is_dir() or (
         unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
     ):
+        logger.debug("repo %s has been used; not removing", repo_pod_dir)
         return None
-
-    make_lock_file(repo_pod_dir / filenames.REPO_LOCK)
 
     lock = FileLock(
         repo_pod_dir / filenames.REPO_LOCK if use_lock else None,
@@ -499,13 +499,18 @@ def _remove_repo_pod_dir(
         retry_count=5,
     )
     try:
+        lock.create()
         lock.acquire()
-    except LockError as ex:
-        return CacheCloneError.lock_failed(f"could not acquire lock: {ex!s}")
+    except (LockError, OSError) as ex:
+        return CacheCloneError.lock_failed(ex)
     else:
-        if repo_pod_dir.is_dir() and not (
-            unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
-        ):
+        with LogSection("remove repo critical zone"):
+            if not repo_pod_dir.is_dir() or (
+                unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
+            ):
+                logger.debug("repo %s has been used; not removing", repo_pod_dir)
+                return None
+
             remove_pod_from_disk(repo_pod_dir)
     finally:
         lock.release()
@@ -528,11 +533,9 @@ def clean(
 
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
     if not repo_pod_dir.is_dir():
-        logger.info("repo %s not cached", uri)
         return CacheCloneError.repo_not_found(uri)
 
-    _remove_repo_pod_dir(repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for)
-    return None
+    return _remove_repo_pod_dir(repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for)
 
 
 # endregion clean
