@@ -1,16 +1,16 @@
 """refresh cached repositories"""
 
 import argparse
-import logging
 from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.core import refresh_main
+from git_cache_clone.core import refresh
 from git_cache_clone.utils.cli import non_empty_string
 from git_cache_clone.utils.file_lock import LockWaitTimeoutError
+from git_cache_clone.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
@@ -74,12 +74,12 @@ def cli_main(args: CLIArgumentNamespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
 
-    logger.debug("running refresh subcommand")
+    logger.trace("running refresh subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
 
     try:
-        err = refresh_main(
+        err = refresh(
             config=config,
             uri=args.uri,
             refresh_all=args.all,

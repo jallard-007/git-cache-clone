@@ -1,8 +1,9 @@
-import logging
 import subprocess
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def run_git_command(

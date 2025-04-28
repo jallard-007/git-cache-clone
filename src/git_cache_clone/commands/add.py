@@ -1,17 +1,17 @@
 """add a repository to cache"""
 
 import argparse
-import logging
 from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace, get_clone_mode_from_git_config
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import defaults
-from git_cache_clone.core import add_main
+from git_cache_clone.core import add
 from git_cache_clone.utils.cli import non_empty_string
 from git_cache_clone.utils.file_lock import LockWaitTimeoutError
+from git_cache_clone.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
@@ -86,7 +86,7 @@ def cli_main(args: CLIArgumentNamespace) -> int:
         Exit code (0 for success, 1 for failure).
     """
 
-    logger.debug("running add subcommand")
+    logger.trace("running add subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
 
@@ -94,11 +94,10 @@ def cli_main(args: CLIArgumentNamespace) -> int:
         raise ValueError
 
     try:
-        err = add_main(
+        err = add(
             config=config,
             uri=args.uri,
             clone_args=args.forwarded_args,
-            exist_ok=args.refresh,
             refresh_if_exists=args.refresh,
         )
     except LockWaitTimeoutError as ex:

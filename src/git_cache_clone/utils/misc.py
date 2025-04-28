@@ -1,4 +1,3 @@
-import logging
 import re
 import signal
 from contextlib import contextmanager
@@ -6,7 +5,9 @@ from types import FrameType
 from typing import Generator, NoReturn, Optional
 from urllib.parse import urlparse, urlunparse
 
-logger = logging.getLogger(__name__)
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def normalize_git_uri(uri: str) -> str:

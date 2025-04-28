@@ -17,9 +17,9 @@ from git_cache_clone.cli_arguments import (
     get_standard_options_parser,
 )
 from git_cache_clone.commands import register_all_commands
-from git_cache_clone.utils.logging import InfoStrippingFormatter, compute_log_level
+from git_cache_clone.utils.logging import InfoStrippingFormatter, compute_log_level, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 """
 Some terminology:
@@ -63,8 +63,8 @@ def main(args: Optional[List[str]] = None) -> int:
     level = compute_log_level(log_level_options.verbose, log_level_options.quiet)
     configure_logger(level)
 
-    logger.debug("received args: %s", args)
-    logger.debug("extra args: %s", forwarded_args)
+    logger.trace("received args: %s", args)
+    logger.trace("extra args: %s", forwarded_args)
 
     main_parser = DefaultSubcommandArgParse(
         description=__doc__,
@@ -82,7 +82,7 @@ def main(args: Optional[List[str]] = None) -> int:
         our_args, namespace=CLIArgumentNamespace(forwarded_args=forwarded_args)
     )
 
-    logger.debug(parsed_args)
+    logger.trace(parsed_args)
 
     return parsed_args.func(parsed_args)
 
@@ -91,7 +91,7 @@ def configure_logger(level: int) -> None:
     handler = logging.StreamHandler(sys.stderr)
     formatter = InfoStrippingFormatter(fmt="%(levelname)s: %(message)s")
     handler.setFormatter(formatter)
-    package_logger = logging.getLogger(__name__.split(".")[0])
+    package_logger = get_logger(__name__.split(".")[0])
     package_logger.handlers.clear()
     package_logger.addHandler(handler)
     package_logger.setLevel(level)

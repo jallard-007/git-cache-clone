@@ -1,11 +1,11 @@
-import logging
 import shutil
 from pathlib import Path
 
 from git_cache_clone.constants import filenames
+from git_cache_clone.utils.logging import get_logger
 from git_cache_clone.utils.misc import flatten_uri, normalize_git_uri
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Pod:
