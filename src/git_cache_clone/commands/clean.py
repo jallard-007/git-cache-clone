@@ -5,10 +5,9 @@ from typing import List
 
 from git_cache_clone.cli_arguments import CLIArgumentNamespace
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.core import clean
-from git_cache_clone.errors import CacheCloneErrorType
+from git_cache_clone.core import clean, clean_all
+from git_cache_clone.errors import GitCacheErrorType
 from git_cache_clone.utils.cli import non_empty_string
-from git_cache_clone.utils.file_lock import LockWaitTimeoutError
 from git_cache_clone.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,14 +73,18 @@ def cli_main(
 
     config = GitCacheConfig.from_cli_namespace(args)
 
-    try:
-        err = clean(config=config, uri=args.uri, clean_all=args.all, unused_for=args.unused_for)
-    except LockWaitTimeoutError as ex:
-        logger.warning(ex)
-        return 1
+    if args.all:
+        clean_all(config=config, unused_for=args.unused_for)
+        return 0
+
+    if not args.uri:
+        # should never get here as long as arg parse setup is correct
+        raise ValueError
+
+    err = clean(config=config, uri=args.uri, unused_for=args.unused_for)
 
     if err:
-        if err.type == CacheCloneErrorType.REPO_NOT_FOUND:
+        if err.type == GitCacheErrorType.REPO_NOT_FOUND:
             logger.info(err)
         else:
             logger.warning(err)

@@ -1,6 +1,8 @@
+import os
 import re
 import signal
 from contextlib import contextmanager
+from pathlib import Path
 from types import FrameType
 from typing import Generator, NoReturn, Optional
 from urllib.parse import urlparse, urlunparse
@@ -101,3 +103,17 @@ def timeout_guard(seconds: Optional[int]) -> Generator[None, None, None]:
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, original_handler)
+
+
+def get_disk_usage(start_path: Optional[Path] = None) -> int:
+    if start_path is None:
+        start_path = Path.cwd()
+
+    total_size = 0
+    for dirpath, _, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+
+    return total_size

@@ -67,16 +67,22 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.refresh.refresh") as mock_func:
+    with mock.patch("git_cache_clone.commands.refresh.refresh") as mock_func, mock.patch(
+        "git_cache_clone.commands.refresh.refresh_all"
+    ) as mock_func_all:
         mock_func.return_value = True
         cli_main(parsed_args)
 
         config = GitCacheConfig.from_cli_namespace(parsed_args)
-
-        mock_func.assert_called_once_with(
-            config=config,
-            uri=uri,
-            refresh_all=refresh_all,
-            fetch_args=extra_options,
-            allow_create=add,
-        )
+        if refresh_all:
+            mock_func_all.assert_called_once_with(
+                config=config,
+                fetch_args=extra_options,
+            )
+        else:
+            mock_func.assert_called_once_with(
+                config=config,
+                uri=uri,
+                fetch_args=extra_options,
+                allow_create=add,
+            )

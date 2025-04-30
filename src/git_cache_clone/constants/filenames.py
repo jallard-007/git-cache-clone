@@ -8,3 +8,6 @@ REPO_DIR = "git"
 """Name of clone directory in a repo dir"""
 
 REPOS_DIR = "repos"
+
+METADATA_DB = "metadata.db"
+METADATA_DB_LOCK = "metadata.db.lock"

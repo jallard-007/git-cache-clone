@@ -63,13 +63,20 @@ def test_cli_args(
 
     parsed_args = patched_parser.parse_args(args, namespace=CLIArgumentNamespace())
 
-    with mock.patch("git_cache_clone.commands.clean.clean") as mock_func:
+    with mock.patch("git_cache_clone.commands.clean.clean") as mock_func, mock.patch(
+        "git_cache_clone.commands.clean.clean_all"
+    ) as mock_func_all:
         mock_func.return_value = None
         cli_main(parsed_args)
         config = GitCacheConfig.from_cli_namespace(parsed_args)
-        mock_func.assert_called_once_with(
-            config=config,
-            uri=uri,
-            clean_all=clean_all,
-            unused_for=unused_for,
-        )
+        if clean_all:
+            mock_func_all.assert_called_once_with(
+                config=config,
+                unused_for=unused_for,
+            )
+        else:
+            mock_func.assert_called_once_with(
+                config=config,
+                uri=uri,
+                unused_for=unused_for,
+            )

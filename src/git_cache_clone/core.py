@@ -1,19 +1,21 @@
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional, TypeVar
 
+from git_cache_clone import metadata
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
-from git_cache_clone.errors import CacheCloneError, CacheCloneErrorType
+from git_cache_clone.errors import GitCacheError, GitCacheErrorType
 from git_cache_clone.pod import get_repo_pod_dir, mark_repo_used, remove_pod_from_disk
+from git_cache_clone.result import Result
 from git_cache_clone.types import CloneMode
-from git_cache_clone.utils import run_git_command
 from git_cache_clone.utils.file_lock import (
     FileLock,
     LockError,
-    LockFileNotFoundError,
 )
+from git_cache_clone.utils.git import get_repo_remote_url, run_git_command
 from git_cache_clone.utils.logging import LogSection, get_logger
+from git_cache_clone.utils.misc import get_disk_usage
 
 logger = get_logger(__name__)
 
@@ -30,10 +32,10 @@ def _clean_up_failed_attempt_clone_repo(lock: FileLock, repo_pod_dir: Path) -> N
 
 def _attempt_clone_repo(
     repo_pod_dir: Path, uri: str, clone_mode: CloneMode, clone_args: Optional[List[str]]
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     repo_dir = repo_pod_dir / filenames.REPO_DIR
     if repo_dir.exists():
-        return CacheCloneError.repo_already_exists(uri)
+        return GitCacheError.repo_already_exists(uri)
 
     logger.debug("adding %s to cache at %s", uri, repo_pod_dir)
 
@@ -44,10 +46,15 @@ def _attempt_clone_repo(
     if clone_args:
         our_clone_args += clone_args
 
+    start_time = time.time()
     res = run_git_command(git_args, "clone", our_clone_args)
     if res.returncode != 0:
-        return CacheCloneError.git_command_failed()
+        return GitCacheError.git_command_failed()
 
+    logger.info("added to cache %s", uri)
+    end_time = time.time()
+    size_kb = int(get_disk_usage(repo_dir) / 1000)
+    metadata.note_add_event(uri, repo_dir, end_time - start_time, size_kb)
     return None
 
 
@@ -57,7 +64,7 @@ def _add_or_refresh_locked_repo(
     uri: str,
     clone_args: Optional[List[str]],
     refresh_if_exists: bool,
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
     try:
         error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, clone_args)
@@ -68,11 +75,11 @@ def _add_or_refresh_locked_repo(
     if error is None:
         return None
 
-    if error.type == CacheCloneErrorType.REPO_ALREADY_EXISTS:
+    if error.type == GitCacheErrorType.REPO_ALREADY_EXISTS:
         if refresh_if_exists:
             return _attempt_repo_fetch(repo_pod_dir, fetch_args=None)
 
-    elif error.type == CacheCloneErrorType.GIT_COMMAND_FAILED:
+    elif error.type == GitCacheErrorType.GIT_COMMAND_FAILED:
         _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
 
     return error
@@ -83,7 +90,7 @@ def _add_or_refresh_repo(
     uri: str,
     clone_args: Optional[List[str]],
     refresh_if_exists: bool,
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     """Clones the repository into the cache.
 
     Args:
@@ -98,24 +105,13 @@ def _add_or_refresh_repo(
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
 
     if (repo_pod_dir / filenames.REPO_DIR).is_dir():
-        return CacheCloneError.repo_already_exists(uri)
+        return GitCacheError.repo_already_exists(uri)
 
-    lock = FileLock(
-        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
-        shared=False,
-        wait_timeout=config.lock_wait_timeout,
-        retry_count=5,
-    )
-    try:
-        lock.create()
-        lock.acquire()
-    except (LockError, OSError) as ex:
-        return CacheCloneError.lock_failed(ex)
-    else:
-        with LogSection("add/refresh critical zone"):
+    def action(lock: FileLock) -> Optional[GitCacheError]:
+        with LogSection("add/refresh -- critical zone"):
             return _add_or_refresh_locked_repo(lock, config, uri, clone_args, refresh_if_exists)
-    finally:
-        lock.release()
+
+    return _locked_action_none_return(config=config, repo_pod_dir=repo_pod_dir, fn=action)
 
 
 def add(
@@ -123,8 +119,12 @@ def add(
     uri: str,
     clone_args: Optional[List[str]] = None,
     refresh_if_exists: bool = False,
-) -> Optional[CacheCloneError]:
-    return _add_or_refresh_repo(config, uri, clone_args, refresh_if_exists=refresh_if_exists)
+) -> Optional[GitCacheError]:
+    error = _add_or_refresh_repo(config, uri, clone_args, refresh_if_exists=refresh_if_exists)
+    db_err = metadata.apply_noted_events(config)
+    if db_err:
+        logger.error(db_err)
+    return error
 
 
 # endregion add
@@ -134,17 +134,24 @@ def add(
 
 def _attempt_repo_fetch(
     repo_pod_dir: Path, fetch_args: Optional[List[str]]
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     repo_dir = repo_pod_dir / filenames.REPO_DIR
     if not repo_dir.exists():
-        return CacheCloneError.repo_not_found("")
+        return GitCacheError.repo_not_found("")
 
     logger.debug("refreshing %s", repo_dir)
 
-    git_args = ["-C", str(repo_pod_dir)]
+    git_args = ["-C", str(repo_dir)]
     res = run_git_command(git_args, command="fetch", command_args=fetch_args)
     if res.returncode != 0:
-        return CacheCloneError.git_command_failed()
+        return GitCacheError.git_command_failed()
+
+    size_kb = int(get_disk_usage(repo_dir) / 1000)
+    pruned = "--prune" in fetch_args if fetch_args else False
+    uri = get_repo_remote_url(repo_dir)
+    if uri:
+        logger.info("refreshed cache %s", uri)
+        metadata.note_fetch_event(uri, size_kb, pruned)
 
     return None
 
@@ -155,13 +162,13 @@ def _refresh_or_add_locked_repo(
     uri: str,
     fetch_args: Optional[List[str]],
     allow_create: bool,
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
     error = _attempt_repo_fetch(repo_pod_dir, fetch_args)
     if error is None:
         return None
 
-    if not (error.type == CacheCloneErrorType.REPO_NOT_FOUND and allow_create):
+    if not (error.type == GitCacheErrorType.REPO_NOT_FOUND and allow_create):
         return error
 
     # the repo does not exist and we can create one ...
@@ -171,7 +178,7 @@ def _refresh_or_add_locked_repo(
         _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
         raise
 
-    if error is not None and error.type == CacheCloneErrorType.GIT_COMMAND_FAILED:
+    if error is not None and error.type == GitCacheErrorType.GIT_COMMAND_FAILED:
         _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
 
     return error
@@ -182,7 +189,7 @@ def _refresh_or_add_repo(
     uri: str,
     fetch_args: Optional[List[str]],
     allow_add: bool,
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     """Refreshes a repository.
 
     Args:
@@ -197,77 +204,70 @@ def _refresh_or_add_repo(
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
     repo_dir = repo_pod_dir / filenames.REPO_DIR
     if not repo_dir.exists() and not allow_add:
-        return CacheCloneError.repo_not_found(uri)
+        return GitCacheError.repo_not_found(uri)
 
-    lock = FileLock(
-        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
-        shared=False,
-        wait_timeout=config.lock_wait_timeout,
-        retry_count=5,
-    )
-    try:
-        lock.create()
-        lock.acquire()
-    except (LockError, OSError) as ex:
-        return CacheCloneError.lock_failed(ex)
-    else:
-        with LogSection("refresh/add critical zone"):
+    def action(lock: FileLock) -> Optional[GitCacheError]:
+        with LogSection("refresh/add -- critical zone"):
             return _refresh_or_add_locked_repo(lock, config, uri, fetch_args, allow_add)
-    finally:
-        lock.release()
+
+    return _locked_action_none_return(config=config, repo_pod_dir=repo_pod_dir, fn=action)
 
 
-def _refresh_repo_at_path(
+def _refresh_repo(
     config: GitCacheConfig,
     repo_pod_dir: Path,
     fetch_args: Optional[List[str]],
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     repo_dir = repo_pod_dir / filenames.REPO_DIR
     if not repo_dir.exists():
-        return CacheCloneError.repo_not_found("")
+        return GitCacheError.repo_not_found("")
 
-    lock = FileLock(
-        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
-        shared=False,
-        wait_timeout=config.lock_wait_timeout,
-        retry_count=5,
-    )
-    try:
-        lock.create()
-        lock.acquire()
-    except (LockError, OSError) as ex:
-        return CacheCloneError.lock_failed(ex)
-    else:
-        with LogSection("refresh at path critical zone"):
+    def action(_: FileLock) -> Optional[GitCacheError]:
+        with LogSection("refresh -- critical zone"):
             return _attempt_repo_fetch(repo_pod_dir, fetch_args)
-    finally:
-        lock.release()
+
+    return _locked_action_none_return(config=config, repo_pod_dir=repo_pod_dir, fn=action)
 
 
-def _refresh_all_repos(
+def refresh(
     config: GitCacheConfig,
-    git_fetch_args: Optional[List[str]] = None,
+    uri: str,
+    fetch_args: Optional[List[str]] = None,
+    allow_create: bool = False,
+) -> Optional[GitCacheError]:
+    if not uri:
+        return GitCacheError.invalid_argument("missing uri argument")
+
+    error = _refresh_or_add_repo(
+        config=config, uri=uri, fetch_args=fetch_args, allow_add=allow_create
+    )
+    db_err = metadata.apply_noted_events(config)
+    if db_err:
+        logger.error(db_err)
+    return error
+
+
+def refresh_all(
+    config: GitCacheConfig,
+    fetch_args: Optional[List[str]] = None,
 ) -> None:
     """Refreshes all cached repositories.
 
     Args:
         config:
         git_fetch_args: options to forward to the 'git fetch' call
-
-    Returns:
-        True if all caches were refreshed successfully, False otherwise.
     """
     logger.debug("refreshing all cached repos")
     repos_dir = config.root_dir / filenames.REPOS_DIR
     repo_pod_dirs = repos_dir.glob("*/")
-    # TODO, do in parallel
+    # to-do: do in parallel
     for repo_pod_dir in repo_pod_dirs:
         if (repo_pod_dir / filenames.REPO_DIR).exists():
             try:
-                error = _refresh_repo_at_path(
+                error = _refresh_repo(
                     config,
                     repo_pod_dir,
-                    fetch_args=git_fetch_args,
+                    fetch_args=fetch_args,
                 )
                 if error:
                     logger.warning(error)
@@ -275,24 +275,9 @@ def _refresh_all_repos(
             except LockError:
                 pass
 
-
-def refresh(
-    config: GitCacheConfig,
-    uri: Optional[str] = None,
-    refresh_all: bool = False,
-    fetch_args: Optional[List[str]] = None,
-    allow_create: bool = False,
-) -> Optional[CacheCloneError]:
-    if refresh_all:
-        _refresh_all_repos(config, fetch_args)
-        return None
-
-    if not uri:
-        raise ValueError("Missing uri argument")  # noqa: TRY003
-
-    return _refresh_or_add_repo(
-        config=config, uri=uri, fetch_args=fetch_args, allow_add=allow_create
-    )
+    db_err = metadata.apply_noted_events(config)
+    if db_err:
+        logger.error(db_err)
 
 
 # endregion refresh
@@ -302,7 +287,7 @@ def refresh(
 
 def _standard_clone(
     uri: str, dest: Optional[str], clone_args: Optional[List[str]]
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     logger.debug("cloning %s", uri)
 
     clone_args_ = [uri]
@@ -318,7 +303,7 @@ def _standard_clone(
         if res.stderr:
             # print(res.stderr.decode(), end="")
             pass
-        return CacheCloneError.git_command_failed()
+        return GitCacheError.git_command_failed()
     return None
 
 
@@ -328,11 +313,11 @@ def _attempt_reference_clone(
     dest: Optional[str],
     dissociate: bool,
     clone_args: Optional[List[str]],
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     repo_dir = repo_pod_dir / filenames.REPO_DIR
 
     if not repo_dir.is_dir():
-        return CacheCloneError.repo_not_found(uri)
+        return GitCacheError.repo_not_found(uri)
 
     logger.debug("cloning with reference to %s", repo_dir)
 
@@ -345,9 +330,21 @@ def _attempt_reference_clone(
 
     if dissociate:
         clone_args_.append("--dissociate")
+        dependent = None
+    elif dest:
+        dependent = Path.cwd() / dest
+    else:
+        dependent = Path.cwd() / uri.split("/")[-1]
 
     clone_args = clone_args_ if clone_args is None else clone_args_ + clone_args
-    return _standard_clone(uri, dest, clone_args)
+    start_time = time.time()
+    error = _standard_clone(uri, dest, clone_args)
+    if error is not None:
+        return error
+
+    end_time = time.time()
+    metadata.note_reference_clone_event(uri, end_time - start_time, dependent)
+    return None
 
 
 def _reference_clone(
@@ -356,38 +353,25 @@ def _reference_clone(
     dest: Optional[str],
     dissociate: bool,
     clone_args: Optional[List[str]],
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     """Performs a git clone with --reference.
 
     Args:
         config:
         uri: The URI of the repository to clone.
         dest: The destination directory for the clone. Defaults to None.
+        dissociate:
         clone_args: Additional arguments to pass to the git clone command. Defaults to None.
-        allow_create: Add the repository to cache if it isn't already
-        refresh_if_exists: Refresh the cached repository if it already exists
-        retry_on_fail:
 
     Returns:
-        errors of type REPO_NOT_FOUND or GIT_COMMAND_FAILURE, or None
+        GitCacheError or None
     """
     repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
+    if not (repo_pod_dir.is_dir() and (repo_pod_dir / filenames.REPO_DIR).is_dir()):
+        return GitCacheError.repo_not_found(uri)
 
-    lock = FileLock(
-        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
-        # shared lock for read action
-        shared=True,
-        wait_timeout=config.lock_wait_timeout,
-        retry_count=0,
-    )
-    try:
-        lock.acquire()
-    except LockFileNotFoundError:
-        return CacheCloneError.repo_not_found(uri)
-    except (LockError, OSError) as ex:
-        return CacheCloneError.lock_failed(ex)
-    else:
-        with LogSection("reference clone critical zone"):
+    def action(_: FileLock) -> Optional[GitCacheError]:
+        with LogSection("reference clone -- critical zone"):
             return _attempt_reference_clone(
                 repo_pod_dir,
                 uri,
@@ -395,8 +379,8 @@ def _reference_clone(
                 dissociate,
                 clone_args,
             )
-    finally:
-        lock.release()
+
+    return _locked_action_none_return(config, repo_pod_dir, action, shared=True)
 
 
 def clone(
@@ -408,9 +392,9 @@ def clone(
     allow_add: bool = False,
     refresh_if_exists: bool = False,
     retry_on_fail: bool = False,
-) -> Optional[CacheCloneError]:
+) -> Optional[GitCacheError]:
     # can't do everything in the lock as add/fetch are write actions (exclusive lock), but clone is read
-    error: Optional[CacheCloneError] = None
+    error: Optional[GitCacheError] = None
     if allow_add:
         error = _add_or_refresh_repo(config, uri, None, refresh_if_exists=refresh_if_exists)
 
@@ -426,8 +410,11 @@ def clone(
 
     if error is not None and retry_on_fail:
         logger.warning("%s -- attempting standard clone", error)
-        return _standard_clone(uri, dest, clone_args)
+        error = _standard_clone(uri, dest, clone_args)
 
+    db_err = metadata.apply_noted_events(config)
+    if db_err:
+        logger.error(db_err)
     return error
 
 
@@ -455,7 +442,64 @@ def _was_used_within(repo_pod_dir: Path, days: int) -> bool:
         return False  # treat as stale
 
 
-def _remove_all_repos(
+def _remove_repo_pod_dir(
+    config: GitCacheConfig,
+    repo_pod_dir: Path,
+    unused_for: Optional[int],
+) -> Optional[GitCacheError]:
+    if not repo_pod_dir.is_dir() or (
+        unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
+    ):
+        logger.debug("repo %s has been used; not removing", repo_pod_dir)
+        return None
+
+    def action(_: FileLock) -> Optional[GitCacheError]:
+        with LogSection("remove repo -- critical zone"):
+            if not repo_pod_dir.is_dir() or (
+                unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
+            ):
+                logger.debug("repo %s has been used; not removing", repo_pod_dir)
+                return None
+
+            repo_dir = repo_pod_dir / filenames.REPO_DIR
+            uri = get_repo_remote_url(repo_dir)
+            try:
+                remove_pod_from_disk(repo_pod_dir)
+            except OSError as ex:
+                # TODO. handle this properly. was the repo itself removed, or did just the pod dir fail?
+                logger.warning("failed to remove directory %s", ex)
+            else:
+                if uri:
+                    logger.info("removed from cache %s", uri)
+                    metadata.note_remove_event(uri)
+
+            return None
+
+    return _locked_action_none_return(
+        config=config, repo_pod_dir=repo_pod_dir, fn=action, check_exists_on_release=False
+    )
+
+
+def clean(
+    config: GitCacheConfig,
+    uri: str,
+    unused_for: Optional[int] = None,
+) -> Optional[GitCacheError]:
+    if not uri:
+        return GitCacheError.invalid_argument("missing uri argument")
+
+    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
+    if not repo_pod_dir.is_dir():
+        return GitCacheError.repo_not_found(uri)
+
+    error = _remove_repo_pod_dir(config, repo_pod_dir, unused_for)
+    db_err = metadata.apply_noted_events(config)
+    if db_err:
+        logger.error(db_err)
+    return error
+
+
+def clean_all(
     config: GitCacheConfig,
     unused_for: Optional[int],
 ) -> None:
@@ -472,70 +516,102 @@ def _remove_all_repos(
     repos_dir = config.root_dir / filenames.REPOS_DIR
     repo_pod_dirs = repos_dir.glob("*/")
     for repo_pod_dir in repo_pod_dirs:
-        error = _remove_repo_pod_dir(
-            repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for
-        )
+        error = _remove_repo_pod_dir(config, repo_pod_dir, unused_for)
         if error:
             logger.warning(error)
 
+    db_err = metadata.apply_noted_events(config)
+    if db_err:
+        logger.error(db_err)
 
-def _remove_repo_pod_dir(
+
+# endregion clean
+
+# region info
+
+
+def info(config: GitCacheConfig, uri: str) -> Result[dict]:
+    if not uri:
+        return Result(error=GitCacheError.invalid_argument("missing uri argument"))
+
+    result = metadata.get_repo_metadata(config, uri)
+    if result.is_err():
+        return Result(error=result.error)
+
+    db_record = result.value
+    if db_record is None:
+        return Result({})
+
+    return Result(db_record.to_dict())
+
+
+def info_all(config: GitCacheConfig) -> Result[List[dict]]:
+    result = metadata.get_all_repo_metadata(config)
+    if result.is_err():
+        return Result(error=result.error)
+
+    db_records = result.value
+    db_records_as_dicts = [r.to_dict() for r in db_records]
+
+    return Result(db_records_as_dicts)
+
+
+# endregion info
+
+# region helpers
+
+
+def _locked_action_none_return(
+    config: GitCacheConfig,
     repo_pod_dir: Path,
-    wait_timeout: int,
-    use_lock: bool,
-    unused_for: Optional[int],
-) -> Optional[CacheCloneError]:
-    if not repo_pod_dir.is_dir() or (
-        unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
-    ):
-        logger.debug("repo %s has been used; not removing", repo_pod_dir)
-        return None
-
+    fn: Callable[[FileLock], Optional[GitCacheError]],
+    shared: bool = False,
+    retry_count: int = 5,
+    check_exists_on_release: bool = True,
+) -> Optional[GitCacheError]:
     lock = FileLock(
-        repo_pod_dir / filenames.REPO_LOCK if use_lock else None,
-        shared=False,
-        wait_timeout=wait_timeout,
-        check_exists_on_release=False,
-        retry_count=5,
+        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
+        shared=shared,
+        wait_timeout=config.lock_wait_timeout,
+        retry_count=retry_count,
+        check_exists_on_release=check_exists_on_release,
     )
     try:
         lock.create()
         lock.acquire()
     except (LockError, OSError) as ex:
-        return CacheCloneError.lock_failed(ex)
+        return GitCacheError.lock_failed(ex)
     else:
-        with LogSection("remove repo critical zone"):
-            if not repo_pod_dir.is_dir() or (
-                unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
-            ):
-                logger.debug("repo %s has been used; not removing", repo_pod_dir)
-                return None
-
-            remove_pod_from_disk(repo_pod_dir)
+        return fn(lock)
     finally:
         lock.release()
 
-    return None
+
+T = TypeVar("T")
 
 
-def clean(
+def _locked_action(
+    shared: bool,
+    retry_count: int,
     config: GitCacheConfig,
-    uri: Optional[str] = None,
-    clean_all: bool = False,
-    unused_for: Optional[int] = None,
-) -> Optional[CacheCloneError]:
-    if clean_all:
-        _remove_all_repos(config, unused_for)
-        return None
+    repo_pod_dir: Path,
+    fn: Callable[[FileLock], Result[T]],
+) -> Result[T]:
+    lock = FileLock(
+        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
+        shared=shared,
+        wait_timeout=config.lock_wait_timeout,
+        retry_count=retry_count,
+    )
+    try:
+        lock.create()
+        lock.acquire()
+    except (LockError, OSError) as ex:
+        return Result(error=GitCacheError.lock_failed(ex))
+    else:
+        return fn(lock)
+    finally:
+        lock.release()
 
-    if not uri:
-        raise ValueError("Missing uri argument")  # noqa: TRY003
 
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    if not repo_pod_dir.is_dir():
-        return CacheCloneError.repo_not_found(uri)
-
-    return _remove_repo_pod_dir(repo_pod_dir, config.lock_wait_timeout, config.use_lock, unused_for)
-
-
-# endregion clean
+# endregion helpers
