@@ -3,10 +3,10 @@
 import argparse
 from typing import List
 
-from git_cache_clone.cli_arguments import CLIArgumentNamespace
+from git_cache_clone.cli.arguments import CLIArgumentNamespace
+from git_cache_clone.cli.utils import non_empty_string
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.core import info, info_all
-from git_cache_clone.utils.cli import non_empty_string
 from git_cache_clone.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -40,7 +40,7 @@ def add_subparser(subparsers, parents: List[argparse.ArgumentParser]) -> argpars
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=parents,
     )
-    parser.set_defaults(func=cli_main)
+    parser.set_defaults(func=main)
     add_parser_arguments(parser)
     return parser
 
@@ -49,7 +49,7 @@ def setup(subparsers, parents: List[argparse.ArgumentParser]) -> None:  # noqa: 
     add_subparser(subparsers, parents)
 
 
-def cli_main(
+def main(
     args: CLIArgumentNamespace,
 ) -> int:
     """CLI entry point for the 'info' command.

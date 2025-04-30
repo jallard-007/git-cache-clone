@@ -33,6 +33,7 @@ def _clean_up_failed_attempt_clone_repo(lock: FileLock, repo_pod_dir: Path) -> N
 def _attempt_clone_repo(
     repo_pod_dir: Path, uri: str, clone_mode: CloneMode, clone_args: Optional[List[str]]
 ) -> Optional[GitCacheError]:
+    repo_pod_dir.mkdir(parents=True, exist_ok=True)
     repo_dir = repo_pod_dir / filenames.REPO_DIR
     if repo_dir.exists():
         return GitCacheError.repo_already_exists(uri)

@@ -4,15 +4,15 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.cli_arguments import (
+from git_cache_clone.cli.arguments import (
     CLIArgumentNamespace,
     get_log_level_options_parser,
     get_standard_options_parser,
 )
-from git_cache_clone.commands.refresh import add_subparser, cli_main
+from git_cache_clone.cli.commands.refresh import add_subparser, main
 from git_cache_clone.config import GitCacheConfig
 from tests.fixtures import patch_get_git_config  # noqa: F401
-from tests.utils import craft_options
+from tests.t_utils import craft_options
 
 
 @pytest.fixture
@@ -67,11 +67,11 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.refresh.refresh") as mock_func, mock.patch(
-        "git_cache_clone.commands.refresh.refresh_all"
+    with mock.patch("git_cache_clone.cli.commands.refresh.refresh") as mock_func, mock.patch(
+        "git_cache_clone.cli.commands.refresh.refresh_all"
     ) as mock_func_all:
         mock_func.return_value = True
-        cli_main(parsed_args)
+        main(parsed_args)
 
         config = GitCacheConfig.from_cli_namespace(parsed_args)
         if refresh_all:

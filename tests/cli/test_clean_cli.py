@@ -4,8 +4,8 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.cli_arguments import CLIArgumentNamespace, get_standard_options_parser
-from git_cache_clone.commands.clean import add_subparser, cli_main
+from git_cache_clone.cli.arguments import CLIArgumentNamespace, get_standard_options_parser
+from git_cache_clone.cli.commands.clean import add_subparser, main
 from git_cache_clone.config import GitCacheConfig
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
@@ -63,11 +63,11 @@ def test_cli_args(
 
     parsed_args = patched_parser.parse_args(args, namespace=CLIArgumentNamespace())
 
-    with mock.patch("git_cache_clone.commands.clean.clean") as mock_func, mock.patch(
-        "git_cache_clone.commands.clean.clean_all"
+    with mock.patch("git_cache_clone.cli.commands.clean.clean") as mock_func, mock.patch(
+        "git_cache_clone.cli.commands.clean.clean_all"
     ) as mock_func_all:
         mock_func.return_value = None
-        cli_main(parsed_args)
+        main(parsed_args)
         config = GitCacheConfig.from_cli_namespace(parsed_args)
         if clean_all:
             mock_func_all.assert_called_once_with(

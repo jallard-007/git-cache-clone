@@ -1,8 +1,8 @@
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.core import add
-
-from .utils import create_empty_git_repo
+from tests.fixtures import patch_db_apply_events  # noqa: F401
+from tests.t_utils import create_empty_git_repo
 
 
 def test_add_creates_cache(tmp_path):

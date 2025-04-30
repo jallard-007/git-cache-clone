@@ -3,11 +3,10 @@
 import argparse
 from typing import List
 
-from git_cache_clone.cli_arguments import CLIArgumentNamespace, get_clone_mode_from_git_config
+from git_cache_clone.cli.arguments import CLIArgumentNamespace
+from git_cache_clone.cli.utils import non_empty_string
 from git_cache_clone.config import GitCacheConfig
-from git_cache_clone.constants import defaults
 from git_cache_clone.core import add
-from git_cache_clone.utils.cli import non_empty_string
 from git_cache_clone.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -34,7 +33,6 @@ def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
         dest="clone_mode",
         help="create a mirror repository (implies bare)",
     )
-    parser.set_defaults(clone_mode=get_clone_mode_from_git_config() or defaults.CLONE_MODE)
 
     refresh_group = parser.add_mutually_exclusive_group()
     refresh_group.add_argument(
@@ -66,7 +64,7 @@ def add_subparser(subparsers, parents: List[argparse.ArgumentParser]) -> argpars
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=parents,
     )
-    parser.set_defaults(func=cli_main)
+    parser.set_defaults(func=main)
     add_parser_arguments(parser)
     return parser
 
@@ -75,7 +73,7 @@ def setup(subparsers, parents: List[argparse.ArgumentParser]) -> None:  # noqa: 
     add_subparser(subparsers, parents)
 
 
-def cli_main(args: CLIArgumentNamespace) -> int:
+def main(args: CLIArgumentNamespace) -> int:
     """CLI entry point for the 'add' command.
 
     Args:
@@ -101,7 +99,7 @@ def cli_main(args: CLIArgumentNamespace) -> int:
     )
 
     if err:
-        logger.warning(str(err))
+        logger.error(err)
         return 1
 
     return 0

@@ -23,7 +23,7 @@ classifiers = [
 Homepage = "https://github.com/jallard-007/git-cache-clone"
 
 [project.scripts]
-git-cache = "git_cache_clone.cli_main:main"
+git-cache = "git_cache_clone.cli.main:main"
 
 [tool.poetry]
 packages = [{include = "git_cache_clone", from = "src"}]

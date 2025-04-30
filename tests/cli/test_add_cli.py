@@ -4,8 +4,8 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.cli_arguments import CLIArgumentNamespace, get_standard_options_parser
-from git_cache_clone.commands.add import add_subparser, cli_main
+from git_cache_clone.cli.arguments import CLIArgumentNamespace, get_standard_options_parser
+from git_cache_clone.cli.commands.add import add_subparser, main
 from git_cache_clone.config import GitCacheConfig
 from tests.fixtures import patch_get_git_config  # noqa: F401
 
@@ -66,9 +66,9 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_options)
     )
 
-    with mock.patch("git_cache_clone.commands.add.add") as mock_func:
+    with mock.patch("git_cache_clone.cli.commands.add.add") as mock_func:
         mock_func.return_value = None
-        cli_main(parsed_args)
+        main(parsed_args)
         config = GitCacheConfig.from_cli_namespace(parsed_args)
         mock_func.assert_called_once_with(
             config=config,

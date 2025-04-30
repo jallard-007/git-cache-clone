@@ -96,6 +96,10 @@ def _open_connection_and_apply_events(db_file: Path) -> Optional[GitCacheError]:
 
 
 def apply_noted_events(config: GitCacheConfig) -> Optional[GitCacheError]:
+    return _apply_noted_events(config)
+
+
+def _apply_noted_events(config: GitCacheConfig) -> Optional[GitCacheError]:
     lock_file = config.root_dir / filenames.METADATA_DB_LOCK
     lock = FileLock(
         lock_file,

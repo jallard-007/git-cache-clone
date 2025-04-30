@@ -10,18 +10,19 @@ import sys
 from typing import List, Optional, Tuple
 
 from git_cache_clone import constants
-from git_cache_clone.cli_arguments import (
-    CLIArgumentNamespace,
-    DefaultSubcommandArgParse,
-    get_log_level_options_parser,
-    get_standard_options_parser,
-)
-from git_cache_clone.commands import register_all_commands
 from git_cache_clone.utils.logging import (
     IndentedFormatter,
     compute_log_level,
     get_logger,
 )
+
+from .arguments import (
+    CLIArgumentNamespace,
+    DefaultSubcommandArgParse,
+    get_log_level_options_parser,
+    get_standard_options_parser,
+)
+from .commands import register_all_commands
 
 logger = get_logger(__name__)
 
