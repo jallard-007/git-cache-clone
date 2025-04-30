@@ -6,6 +6,7 @@ import pytest
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.core import clean_all
+from tests.fixtures import patch_db_apply_events  # noqa: F401
 
 
 @pytest.mark.parametrize(

@@ -1,9 +1,8 @@
 import argparse
 from typing import List, Optional
 
-from git_cache_clone.constants import defaults, keys
-from git_cache_clone.types import CLONE_MODES, CloneMode
-from git_cache_clone.utils.git import get_git_config_value
+from git_cache_clone.constants import defaults
+from git_cache_clone.types import CloneMode
 from git_cache_clone.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +37,6 @@ def get_standard_options_parser() -> argparse.ArgumentParser:
     standard_options_parser.add_argument(
         "--root-dir",
         metavar="PATH",
-        default=get_root_dir(),
         help=f"default is '{defaults.ROOT_DIR}'",
     )
     lock_group = standard_options_parser.add_mutually_exclusive_group()
@@ -48,12 +46,11 @@ def get_standard_options_parser() -> argparse.ArgumentParser:
     lock_group.add_argument(
         "--no-use-lock", action="store_false", help="do not use file locks", dest="use_lock"
     )
-    standard_options_parser.set_defaults(use_lock=get_use_lock())
+    lock_group.set_defaults(use_lock=None)
     standard_options_parser.add_argument(
         "--lock-timeout",
         type=int,
         metavar="SECONDS",
-        default=get_lock_wait_timeout(),
         help="maximum time (in seconds) to wait for a lock",
     )
     return standard_options_parser
@@ -78,97 +75,6 @@ def get_log_level_options_parser() -> argparse.ArgumentParser:
     return log_level_parser
 
 
-"""
-I do not know where to put these below functions, so they'll go here for now!
-"""
-
-
-def get_root_dir() -> str:
-    git_conf = get_root_dir_from_git_config()
-    if git_conf:
-        return git_conf
-    return defaults.ROOT_DIR
-
-
-def get_use_lock() -> bool:
-    git_conf = get_use_lock_from_git_config()
-    if git_conf is not None:
-        return git_conf
-    return defaults.USE_LOCK
-
-
-def get_lock_wait_timeout() -> int:
-    git_conf = get_lock_timeout_from_git_config()
-    if git_conf is not None:
-        return git_conf
-    return defaults.LOCK_TIMEOUT
-
-
-def get_clone_mode() -> CloneMode:
-    return get_clone_mode_from_git_config() or defaults.CLONE_MODE  # type: ignore
-
-
-def get_root_dir_from_git_config() -> Optional[str]:
-    """Determines the base path to use.
-
-    Returns:
-        The base path as a string
-    """
-    val = get_git_config_value(keys.GIT_CONFIG_ROOT_DIR)
-    if val and val.strip():
-        return val.strip()
-    return None
-
-
-def get_clone_mode_from_git_config() -> Optional[CloneMode]:
-    """Determines the clone mode to use from Git configuration.
-
-    Returns:
-        The clone mode as a string.
-    """
-    key = keys.GIT_CONFIG_CLONE_MODE
-    clone_mode = get_git_config_value(key)
-    if clone_mode:
-        clone_mode = clone_mode.lower().strip()
-        if clone_mode in CLONE_MODES:
-            return clone_mode  # type: ignore
-
-        logger.warning(
-            ("%s %s not one of %s", key, clone_mode, CLONE_MODES),
-        )
-
-    return None
-
-
-def get_use_lock_from_git_config() -> Optional[bool]:
-    """Determines whether locking is disabled from Git configuration.
-
-    Returns:
-        True if locking is disabled, False otherwise.
-    """
-    use_lock = get_git_config_value(keys.GIT_CONFIG_USE_LOCK)
-    if use_lock is None:
-        return None
-    return use_lock.lower().strip() in {"true", "1", "y", "yes"}
-
-
-def get_lock_timeout_from_git_config() -> Optional[int]:
-    """Determines whether locking is disabled from Git configuration.
-
-    Returns:
-        True if locking is disabled, False otherwise.
-    """
-    key = keys.GIT_CONFIG_LOCK_TIMEOUT
-    timeout = get_git_config_value(key)
-    if not timeout:
-        return None
-    try:
-        return int(timeout.strip())
-    except ValueError as ex:
-        logger.warning("%s: %s", key, ex)
-        return None
-
-
 class CLIArgumentNamespace(argparse.Namespace):
     # initial options, only used in main cli func
     verbose: int
@@ -178,7 +84,7 @@ class CLIArgumentNamespace(argparse.Namespace):
     root_dir: str
     use_lock: bool
     lock_timeout: int
-    clone_mode: CloneMode = get_clone_mode()
+    clone_mode: CloneMode
 
     # all
     uri: Optional[str]

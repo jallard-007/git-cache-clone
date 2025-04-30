@@ -4,15 +4,15 @@ from unittest import mock
 
 import pytest
 
-from git_cache_clone.cli_arguments import (
+from git_cache_clone.cli.arguments import (
     CLIArgumentNamespace,
     get_log_level_options_parser,
     get_standard_options_parser,
 )
-from git_cache_clone.commands.clone import add_subparser, cli_main
+from git_cache_clone.cli.commands.clone import add_subparser, main
 from git_cache_clone.config import GitCacheConfig
 from tests.fixtures import patch_get_git_config  # noqa: F401
-from tests.utils import craft_options
+from tests.t_utils import craft_options
 
 
 @pytest.fixture
@@ -33,20 +33,32 @@ def test_cli_missing_uri(patched_parser):
 
 
 @pytest.mark.parametrize(
-    ("uri", "root_dir", "timeout", "use_lock", "dest", "add", "refresh", "retry", "extra_args"),
+    (
+        "uri",
+        "root_dir",
+        "timeout",
+        "use_lock",
+        "dest",
+        "dissociate",
+        "add",
+        "refresh",
+        "retry",
+        "extra_args",
+    ),
     [
         (
             "some.uri",
             "cache/base/path",
             10,
             True,
-            None,
+            "clone_dest",
             True,
             True,
-            False,
+            True,
+            True,
             ["--some-arg"],
         ),
-        ("uri.some", "cache/path", -1, False, "clone_dest", False, False, True, []),
+        ("uri.some", "cache/path", -1, False, None, False, False, False, False, []),
     ],
 )
 def test_cli_args(
@@ -56,6 +68,7 @@ def test_cli_args(
     timeout: Optional[int],
     use_lock: bool,
     dest: Optional[str],
+    dissociate: bool,
     add: bool,
     refresh: bool,
     retry: bool,
@@ -69,6 +82,7 @@ def test_cli_args(
         root_dir=root_dir,
         lock_timeout=timeout,
         use_lock=use_lock,
+        dissociate=dissociate,
         add=add,
         refresh=refresh,
         retry=retry,
@@ -78,14 +92,15 @@ def test_cli_args(
         args, namespace=CLIArgumentNamespace(forwarded_args=extra_args)
     )
 
-    with mock.patch("git_cache_clone.commands.clone.clone") as mock_func:
+    with mock.patch("git_cache_clone.cli.commands.clone.clone") as mock_func:
         mock_func.return_value = True
-        cli_main(parsed_args)
+        main(parsed_args)
         config = GitCacheConfig.from_cli_namespace(parsed_args)
         mock_func.assert_called_once_with(
             config=config,
             uri=uri,
             dest=dest,
+            dissociate=dissociate,
             clone_args=extra_args,
             allow_add=add,
             refresh_if_exists=refresh,
