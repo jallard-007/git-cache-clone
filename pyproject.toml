@@ -87,7 +87,9 @@ lint.ignore = [
   "LOG015", 
   "PLR0913", 
   "SIM108",
-  "SIM105"
+  "SIM105",
+  "S608",
+  "TRY003"
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -8,7 +8,6 @@ from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import defaults
 from git_cache_clone.core import add
 from git_cache_clone.utils.cli import non_empty_string
-from git_cache_clone.utils.file_lock import LockWaitTimeoutError
 from git_cache_clone.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -91,18 +90,15 @@ def cli_main(args: CLIArgumentNamespace) -> int:
     config = GitCacheConfig.from_cli_namespace(args)
 
     if not args.uri:
+        # should never get here as long as arg parse setup is correct
         raise ValueError
 
-    try:
-        err = add(
-            config=config,
-            uri=args.uri,
-            clone_args=args.forwarded_args,
-            refresh_if_exists=args.refresh,
-        )
-    except LockWaitTimeoutError as ex:
-        logger.warning(str(ex))
-        return 1
+    err = add(
+        config=config,
+        uri=args.uri,
+        clone_args=args.forwarded_args,
+        refresh_if_exists=args.refresh,
+    )
 
     if err:
         logger.warning(str(err))

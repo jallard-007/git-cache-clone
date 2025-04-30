@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from .logging import get_logger
@@ -11,6 +12,7 @@ def run_git_command(
     git_args: Optional[List[str]] = None,
     command: Optional[str] = None,
     command_args: Optional[List[str]] = None,
+    capture_output: bool = False,
 ) -> subprocess.CompletedProcess[bytes]:
     git_cmd = ["git"]
 
@@ -24,7 +26,7 @@ def run_git_command(
         git_cmd += command_args
 
     logger.trace("running '%s'", " ".join(git_cmd))
-    return subprocess.run(git_cmd, check=False)  # noqa: S603
+    return subprocess.run(git_cmd, check=False, capture_output=capture_output)  # noqa: S603
 
 
 # Module-level cache
@@ -80,3 +82,13 @@ def foo(cmd: List[str]) -> subprocess.CompletedProcess[bytes]:
             raise
 
     return subprocess.CompletedProcess(cmd, p.returncode, stdout=None, stderr=b"\n".join(output))
+
+
+def get_repo_remote_url(repo_dir: Path, name: str = "origin") -> Optional[str]:
+    git_args = ["-C", str(repo_dir)]
+    cmd_args = ["get-url", name]
+    res = run_git_command(git_args, "remote", cmd_args, capture_output=True)
+    if res.returncode != 0 or not res.stdout:
+        return None
+
+    return res.stdout.decode().strip()

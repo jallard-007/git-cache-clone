@@ -1,7 +1,11 @@
 import datetime
 import sqlite3
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterable, List, Optional, Union
+
+from git_cache_clone.result import Result
+
+from .utils import get_utc_naive_datetime_now
 
 """
 Repo:           https://github.com/user/repo.git
@@ -14,15 +18,16 @@ Last Used:      2025-04-18 03:15
 Speedup:        ~3.2x (4.2s vs 13.6s)
 """
 
-REPO_METADATA_TABLE_NAME = "repository_metadata"
+
+TABLE_NAME = "repository_metadata"
 
 
-class PathList(list):
-    def __init_subclass__(cls) -> None:
-        return super().__init_subclass__()
+class PathList(List[Path]):
+    def __init__(self, paths: Iterable[Path] = ()) -> None:
+        super().__init__(paths)
 
 
-class RepoMetadata:
+class DbRecord:
     def __init__(
         self,
         normalized_uri: str,
@@ -59,29 +64,29 @@ class RepoMetadata:
         # note that if the repo gets moved then we won't know
         # occasionally query to see if they still exist
         #   (can look at .git/objects/info/alternates to see if it points to cache path)
-        self.potential_dependents: Optional[List[Path]] = potential_dependents
-        """Typed as List[pathlib.Path], but actually a PathList.
-        This is so that we can set an adapter and converter in sqlite3
-        """
+        self.potential_dependents: Optional[PathList] = potential_dependents
 
     @classmethod
-    def from_tuple(cls, t: tuple) -> "RepoMetadata":
+    def from_dict(cls, d: dict) -> "DbRecord":
         return cls(
-            normalized_uri=t[0],
-            repo_dir=t[1],
-            added_date=t[2],
-            removed_date=t[3],
-            last_fetched_date=t[4],
-            last_pruned_date=t[5],
-            last_used_date=t[6],
-            total_num_used=t[7],
-            clone_time_sec=t[8],
-            avg_ref_clone_time_sec=t[9],
-            disk_usage_kb=t[10],
-            potential_dependents=t[11],
+            normalized_uri=d["normalized_uri"],
+            repo_dir=d.get("repo_dir"),
+            added_date=d.get("added_date"),
+            removed_date=d.get("removed_date"),
+            last_fetched_date=d.get("last_fetched_date"),
+            last_pruned_date=d.get("last_pruned_date"),
+            last_used_date=d.get("last_used_date"),
+            total_num_used=d.get("total_num_used"),
+            clone_time_sec=d.get("clone_time_sec"),
+            avg_ref_clone_time_sec=d.get("avg_ref_clone_time_sec"),
+            disk_usage_kb=d.get("disk_usage_kb"),
+            potential_dependents=d.get("potential_dependents"),
         )
 
-    def _to_base_iterable(self) -> tuple:
+    def to_dict(self) -> dict:
+        return self.__dict__
+
+    def to_base_iterable(self) -> tuple:
         """Returns a tuple of all non-primary fields"""
         return (
             self.repo_dir,
@@ -97,56 +102,129 @@ class RepoMetadata:
             self.potential_dependents,
         )
 
-    def db_insert(self, conn: sqlite3.Connection) -> None:
-        conn.execute(
-            "INSERT INTO ? VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (REPO_METADATA_TABLE_NAME, self.normalized_uri, *self._to_base_iterable()),
-        )
 
-    def db_update(self, conn: sqlite3.Connection) -> None:
-        conn.execute(
-            (
-                "UPDATE ?"
-                " SET repo_dir = ?, added_date = ?, removed_date = ?,"
-                " last_fetched_date = ?, last_pruned_date = ?,"
-                " last_used_date = ?, total_num_used = ?, clone_time_sec = ?,"
-                " avg_ref_clone_time_sec = ?, disk_usage_kb = ?,"
-                " potential_dependents = ? WHERE normalized_uri = ?;"
-            ),
-            (REPO_METADATA_TABLE_NAME, *self._to_base_iterable(), self.normalized_uri),
-        )
+def db_insert(db_record: DbRecord, conn: sqlite3.Connection) -> None:
+    conn.execute(
+        f"INSERT INTO {TABLE_NAME} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (db_record.normalized_uri, *db_record.to_base_iterable()),
+    )
+
+
+def db_update(db_record: DbRecord, conn: sqlite3.Connection) -> None:
+    conn.execute(
+        (
+            f"UPDATE {TABLE_NAME}"
+            " SET repo_dir = ?, added_date = ?, removed_date = ?,"
+            " last_fetched_date = ?, last_pruned_date = ?,"
+            " last_used_date = ?, total_num_used = ?, clone_time_sec = ?,"
+            " avg_ref_clone_time_sec = ?, disk_usage_kb = ?,"
+            " potential_dependents = ? WHERE normalized_uri = ?;"
+        ),
+        (*db_record.to_base_iterable(), db_record.normalized_uri),
+    )
 
 
 def create_table(conn: sqlite3.Connection) -> None:
     conn.execute(
+        f"CREATE TABLE {TABLE_NAME}"
         """
-    CREATE TABLE ? (
+    (
         normalized_uri TEXT NOT NULL PRIMARY KEY,
-        repo_dir path,
-        added_date datetime,
-        removed_date datetime,
-        last_fetched_date datetime,
-        last_pruned_date datetime,
-        last_used_date datetime,
+        repo_dir gc_path,
+        added_date gc_datetime,
+        removed_date gc_datetime,
+        last_fetched_date gc_datetime,
+        last_pruned_date gc_datetime,
+        last_used_date gc_datetime,
         total_num_used INTEGER,
         clone_time_sec REAL,
         avg_ref_clone_time_sec REAL,
         disk_usage_kb INTEGER,
-        potential_dependents path_list
+        potential_dependents gc_path_list
     );
-    """,
-        (REPO_METADATA_TABLE_NAME,),
+    """
     )
 
 
-def select_all(conn: sqlite3.Connection) -> List[RepoMetadata]:
-    statement = "SELECT * from ?;"
-    cur = conn.execute(statement, (REPO_METADATA_TABLE_NAME,))
-    return [RepoMetadata.from_tuple(x) for x in cur.fetchall()]
+def select_all(conn: sqlite3.Connection) -> Result[List[DbRecord]]:
+    statement = f"SELECT * from {TABLE_NAME};"
+    cur = conn.execute(statement)
+    return Result([DbRecord.from_dict(x) for x in cur.fetchall()])
 
 
-def select(conn: sqlite3.Connection, normalized_uri: str) -> Optional[RepoMetadata]:
-    statement = "SELECT * from ? WHERE normalized_uri = ?;"
-    args = (REPO_METADATA_TABLE_NAME, normalized_uri)
+def select(conn: sqlite3.Connection, normalized_uri: str) -> Result[Optional[DbRecord]]:
+    statement = f"SELECT * from {TABLE_NAME} WHERE normalized_uri = ?;"
+    args = (normalized_uri,)
     cur = conn.execute(statement, args)
-    return RepoMetadata.from_tuple(cur.fetchone())
+    res = cur.fetchone()
+    if res:
+        return Result(DbRecord.from_dict(res))
+    return Result(None)
+
+
+class AddEvent:
+    def __init__(self, repo_dir: Path, clone_time_sec: float, disk_usage_kb: int) -> None:
+        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.repo_dir = repo_dir
+        self.clone_time_sec = clone_time_sec
+        self.disk_usage_kb = disk_usage_kb
+
+    def apply_to_db_record(self, record: DbRecord) -> None:
+        record.added_date = self.time
+        record.last_fetched_date = self.time
+        record.repo_dir = self.repo_dir
+        record.clone_time_sec = self.clone_time_sec
+        record.disk_usage_kb = self.disk_usage_kb
+        record.removed_date = None
+
+
+class FetchEvent:
+    def __init__(self, disk_usage_kb: int, pruned: bool) -> None:
+        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.disk_usage_kb = disk_usage_kb
+        self.pruned = pruned
+
+    def apply_to_db_record(self, record: DbRecord) -> None:
+        record.last_fetched_date = self.time
+        record.disk_usage_kb = self.disk_usage_kb
+        if self.pruned:
+            record.last_pruned_date = self.time
+
+
+class UseEvent:
+    def __init__(self, reference_clone_time_sec: float, dependent: Optional[Path]) -> None:
+        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.reference_clone_time_sec = reference_clone_time_sec
+        self.dependent = dependent
+
+    def apply_to_db_record(self, record: DbRecord) -> None:
+        if record.total_num_used is None:
+            record.total_num_used = 0
+
+        if record.avg_ref_clone_time_sec is None:
+            record.avg_ref_clone_time_sec = 0.0
+
+        record.last_used_date = self.time
+        record.total_num_used += 1
+
+        record.avg_ref_clone_time_sec = record.avg_ref_clone_time_sec + (
+            self.reference_clone_time_sec - record.avg_ref_clone_time_sec
+        ) / (record.total_num_used)
+
+        if self.dependent:
+            if record.potential_dependents is None:
+                record.potential_dependents = PathList()
+
+            record.potential_dependents.append(self.dependent)
+
+
+class RemoveEvent:
+    def __init__(self) -> None:
+        self.time: datetime.datetime = get_utc_naive_datetime_now()
+
+    def apply_to_db_record(self, record: DbRecord) -> None:
+        record.removed_date = self.time
+        record.disk_usage_kb = 0
+
+
+Event = Union[AddEvent, FetchEvent, RemoveEvent, UseEvent]

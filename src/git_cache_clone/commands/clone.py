@@ -113,12 +113,14 @@ def cli_main(args: CLIArgumentNamespace) -> int:
     config = GitCacheConfig.from_cli_namespace(args)
 
     if not args.uri:
+        # should never get here as long as arg parse setup is correct
         raise ValueError
 
     err = clone(
         config=config,
         uri=args.uri,
         dest=args.dest,
+        dissociate=args.dissociate,
         clone_args=args.forwarded_args,
         allow_add=args.add,
         refresh_if_exists=args.refresh,

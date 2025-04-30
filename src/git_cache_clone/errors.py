@@ -1,52 +1,54 @@
-from enum import Enum
+import enum
 from typing import Optional
 
 
-class CacheCloneErrorType(Enum):
-    REPO_ALREADY_EXISTS = 1
-    REPO_NOT_FOUND = 2
-    LOCK_WAIT_TIMEOUT = 3
-    LOCK_FAILED = 4
-    GIT_COMMAND_FAILED = 5
+class GitCacheErrorType(enum.Enum):
+    INVALID_ARGUMENT = enum.auto()
+    REPO_ALREADY_EXISTS = enum.auto()
+    REPO_NOT_FOUND = enum.auto()
+    LOCK_FAILED = enum.auto()
+    GIT_COMMAND_FAILED = enum.auto()
+    DB_ERROR = enum.auto()
 
 
-class CacheCloneError:
+class GitCacheError:
     def __init__(
-        self, error_type: Optional[CacheCloneErrorType] = None, msg: Optional[str] = None
+        self, error_type: Optional[GitCacheErrorType] = None, msg: Optional[str] = None
     ) -> None:
         self.type = error_type
         self.msg = msg
+        self.ex: Optional[Exception] = None
 
     @classmethod
-    def repo_already_exists(cls, uri: str) -> "CacheCloneError":
-        if uri:
-            msg = f"repository {uri} already exists in cache"
-        else:
-            msg = "repository already exists in cache"
-        return cls(CacheCloneErrorType.REPO_ALREADY_EXISTS, msg)
+    def invalid_argument(cls, reason: str) -> "GitCacheError":
+        return cls(GitCacheErrorType.INVALID_ARGUMENT, f"invalid argument: {reason}")
 
     @classmethod
-    def repo_not_found(cls, uri: str) -> "CacheCloneError":
-        if uri:
-            msg = f"repository {uri} does not exist in cache"
-        else:
-            msg = "repository does not exist in cache"
-        return cls(CacheCloneErrorType.REPO_NOT_FOUND, msg)
+    def repo_already_exists(cls, uri: str) -> "GitCacheError":
+        msg = f"already exists in cache: {uri}"
+        return cls(GitCacheErrorType.REPO_ALREADY_EXISTS, msg)
 
     @classmethod
-    def lock_wait_timeout(cls) -> "CacheCloneError":
-        return cls(CacheCloneErrorType.LOCK_WAIT_TIMEOUT, "timed out waiting for lock file")
+    def repo_not_found(cls, uri: str) -> "GitCacheError":
+        msg = f"does not exist in cache: {uri}"
+        return cls(GitCacheErrorType.REPO_NOT_FOUND, msg)
 
     @classmethod
-    def lock_failed(cls, reason: Optional[object]) -> "CacheCloneError":
-        return cls(
-            CacheCloneErrorType.LOCK_FAILED,
-            "could not acquire lock" + (": " + str(reason) if reason else ""),
+    def lock_failed(cls, cause: Exception) -> "GitCacheError":
+        obj = cls(
+            GitCacheErrorType.LOCK_FAILED,
+            "could not acquire lock" + (": " + str(cause)),
         )
+        obj.ex = cause
+        return obj
 
     @classmethod
-    def git_command_failed(cls, msg: Optional[str] = None) -> "CacheCloneError":
-        return cls(CacheCloneErrorType.GIT_COMMAND_FAILED, msg or "git command failed")
+    def git_command_failed(cls, msg: Optional[str] = None) -> "GitCacheError":
+        return cls(GitCacheErrorType.GIT_COMMAND_FAILED, msg or "git command failed")
+
+    @classmethod
+    def db_error(cls, msg: Optional[str] = None) -> "GitCacheError":
+        return cls(GitCacheErrorType.DB_ERROR, msg or "database error")
 
     def __bool__(self) -> bool:
         return self.type is not None
