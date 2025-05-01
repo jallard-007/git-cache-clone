@@ -1,12 +1,12 @@
 import os
 import time
+from unittest import mock
 
 import pytest
 
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.core import clean_all
-from tests.fixtures import patch_db_apply_events  # noqa: F401
 
 
 @pytest.mark.parametrize(
@@ -33,7 +33,7 @@ def test_git_cache_clean_unused(tmp_path, unused_for):
     old_time = time.time() - (last_access_time * 87400)
     os.utime(marker, (old_time, old_time))
     config = GitCacheConfig(root_dir)
-    result = clean_all(config, unused_for=unused_for)
+    result = clean_all(config, unused_for=unused_for, metadata_applier=mock.MagicMock())
 
     assert result is None
     if unused_for <= last_access_time:

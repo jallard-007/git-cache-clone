@@ -39,6 +39,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
+exclude = ["test_watcher.py", "tests/io_audit.py"]
 target-version = "py38"
 line-length = 100
 lint.select = [
@@ -95,6 +96,7 @@ lint.ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ANN", "PLR0917", "ARG", "S", "SLF001", "RUF005"]
 "src/git_cache_clone/utils/logging.py" = ["ANN", "TRY"]
+
 [tool.coverage.run]
 source = ["src/git_cache_clone"]
 omit = ["tests/*"]

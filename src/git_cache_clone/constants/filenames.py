@@ -9,5 +9,8 @@ REPO_DIR = "git"
 
 REPOS_DIR = "repos"
 
-METADATA_DB = "metadata.db"
-METADATA_DB_LOCK = "metadata.db.lock"
+METADATA_SQLITE_DB = "metadata.sqlite"
+METADATA_SQLITE_DB_LOCK = f"{METADATA_SQLITE_DB}.lock"
+
+METADATA_JSON_DB = "metadata.json"
+METADATA_JSON_DB_LOCK = "metadata.json.lock"

@@ -6,3 +6,5 @@ poetry.lock
 .coverage
 
 t.py
+test_watcher.py
+tests/io_audit.py
