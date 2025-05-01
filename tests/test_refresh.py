@@ -6,14 +6,15 @@ from git_cache_clone import core
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.errors import GitCacheErrorType
-from tests.fixtures import patch_db_apply_events  # noqa: F401
 
 # region fixtures
 
 
 @pytest.fixture
 def mocked_run_git_command():
-    with mock.patch("git_cache_clone.core.run_git_command") as mocked:
+    with mock.patch("git_cache_clone.utils.git.run_command") as mocked:
+        mocked.return_value.returncode = 0
+        mocked.return_value.stdout = None
         yield mocked
 
 
@@ -50,16 +51,14 @@ def gc_config(tmp_path):
 def test_attempt_repo_fetch_success(tmp_path, mocked_run_git_command):
     repo_dir = tmp_path / filenames.REPO_DIR
     repo_dir.mkdir()
-    mocked_run_git_command.return_value.returncode = 0
     result = core._attempt_repo_fetch(tmp_path, None)
     assert result is None
-    mocked_run_git_command.assert_called_once_with(
+    mocked_run_git_command.assert_any_call(
         ["-C", str(repo_dir)], command="fetch", command_args=None
     )
 
 
 def test_attempt_repo_fetch_not_found(tmp_path, mocked_run_git_command):
-    mocked_run_git_command.return_value.returncode = 0
     result = core._attempt_repo_fetch(tmp_path, None)
     assert result is not None
     assert result.type == GitCacheErrorType.REPO_NOT_FOUND

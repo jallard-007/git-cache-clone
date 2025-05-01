@@ -6,7 +6,6 @@ from git_cache_clone import core
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.errors import GitCacheErrorType
-from tests.fixtures import patch_db_apply_events  # noqa: F401
 from tests.t_utils import create_empty_git_repo
 
 # region fixtures
@@ -14,7 +13,7 @@ from tests.t_utils import create_empty_git_repo
 
 @pytest.fixture
 def mocked_run_git_command():
-    with mock.patch("git_cache_clone.core.run_git_command") as mocked:
+    with mock.patch("git_cache_clone.utils.git.run_command") as mocked:
         yield mocked
 
 
@@ -145,7 +144,7 @@ def test_add_creates_cache(tmp_path):
     repos_dir = root_dir / filenames.REPOS_DIR
     config = GitCacheConfig(root_dir=root_dir)
     repo_path = create_empty_git_repo(tmp_path)
-    result = core.add(config, str(repo_path))
+    result = core.add(config, str(repo_path), metadata_applier=mock.MagicMock())
 
     assert result is None
     assert any(repos_dir.iterdir()), "repos directory should not be empty"

@@ -1,12 +1,19 @@
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Optional, Tuple
+from typing import Callable, Generator, Optional, Tuple, TypeVar, Union
 
+from git_cache_clone.config import GitCacheConfig
+from git_cache_clone.constants import filenames
+from git_cache_clone.errors import GitCacheError
+from git_cache_clone.result import Result
+from git_cache_clone.utils.file_lock import FileLock, LockError
 from git_cache_clone.utils.logging import get_logger
 
-from . import repo
-from .adapters_converters import register_adapters_and_converters
+from . import adapters_converters, repo
+
+T = TypeVar("T")
+
 
 logger = get_logger(__name__)
 
@@ -17,19 +24,19 @@ DATABASE_VERSION = (DATABASE_MAJOR_VERSION, DATABASE_MINOR_VERSION)
 VERSION_TABLE_NAME = "schema_version"
 
 
-class Error(Exception):
+class DbError(Exception):
     def __init__(self, *args) -> None:
         super().__init__(*args)
 
 
-class SchemaError(Error):
+class DbSchemaError(DbError):
     def __init__(self, found_version: Tuple[int, int]) -> None:
         super().__init__(
             f"database schema version of '{found_version}' is incompatible with ours: {DATABASE_VERSION}"
         )
 
 
-class InvalidSchemaTableError(Error):
+class DbInvalidSchemaTableError(DbError):
     def __init__(self) -> None:
         super().__init__(
             f"database {VERSION_TABLE_NAME} table has no entries! was the database file tampered with?"
@@ -52,7 +59,7 @@ def update_version_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         f"UPDATE {VERSION_TABLE_NAME}"
         f" SET major = {DATABASE_MAJOR_VERSION}, minor = {DATABASE_MINOR_VERSION}"
-        " WHERE id = 0;"
+        " WHERE id = 0"
     )
 
 
@@ -66,7 +73,7 @@ def get_version(conn: sqlite3.Connection) -> Optional[Tuple[int, int]]:
 
     version = res.fetchone()
     if not version:
-        raise InvalidSchemaTableError
+        raise DbInvalidSchemaTableError
 
     return (version["major"], version["minor"])
 
@@ -75,7 +82,7 @@ def table_exists(conn: sqlite3.Connection, name: str) -> bool:
     cursor = conn.execute(
         """
         SELECT 1 FROM sqlite_master
-        WHERE type='table' AND name=?;
+        WHERE type='table' AND name=?
     """,
         (name,),
     )
@@ -100,11 +107,11 @@ def ensure_database_ready(conn: sqlite3.Connection) -> None:
         migrate_database(conn, found_version)
     elif found_version[0] > DATABASE_MAJOR_VERSION:
         # incompatible schemas
-        raise SchemaError(found_version)
+        raise DbSchemaError(found_version)
 
 
 def migrate_database(conn: sqlite3.Connection, found_version: Tuple[int, int]) -> None:  # noqa: ARG001
-    raise InvalidSchemaTableError
+    raise DbInvalidSchemaTableError
 
 
 def dict_factory(cursor: sqlite3.Cursor, row: sqlite3.Row) -> dict:
@@ -126,7 +133,41 @@ def connection_manager(db_file: Path) -> Generator[sqlite3.Connection, None, Non
 
 
 def connect(db_file: Path) -> sqlite3.Connection:
-    register_adapters_and_converters()
-    conn = sqlite3.connect(db_file, detect_types=sqlite3.PARSE_DECLTYPES)
+    adapters_converters.register()
+    conn = sqlite3.connect(str(db_file), detect_types=sqlite3.PARSE_DECLTYPES)
     conn.row_factory = dict_factory
     return conn
+
+
+def locked_operation(
+    config: GitCacheConfig,
+    func: Union[Callable[[sqlite3.Connection], Result[T]], Callable[[sqlite3.Connection], T]],
+) -> Result[T]:
+    lock_file = config.root_dir / filenames.METADATA_SQLITE_DB_LOCK
+    lock = FileLock(
+        lock_file,
+        shared=False,
+        wait_timeout=1,
+        retry_count=5,
+    )
+    try:
+        lock.create()
+        lock.acquire()
+    except (LockError, OSError) as ex:
+        return Result(error=GitCacheError.lock_failed(ex))
+    else:
+        try:
+            db_file = config.root_dir / filenames.METADATA_SQLITE_DB
+            with connection_manager(db_file) as conn:
+                ensure_database_ready(conn)
+                result = func(conn)
+                if isinstance(result, Result):
+                    return result
+                return Result(result)
+        except (sqlite3.Error, DbError) as ex:
+            return Result(error=GitCacheError.db_error(str(ex)))
+        except Exception as ex:
+            logger.exception("uncaught exception in sqlite store operation")
+            return Result(error=GitCacheError.db_error(str(ex)))
+    finally:
+        lock.release()

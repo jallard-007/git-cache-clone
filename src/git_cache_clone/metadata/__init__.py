@@ -1,18 +1,24 @@
 from .collection import (
-    apply_noted_events,
     note_add_event,
     note_fetch_event,
     note_reference_clone_event,
     note_remove_event,
 )
-from .repo import DbRecord as RepoDbRecord
-from .tools import get_all_repo_metadata, get_repo_metadata
+from .json_store import Applier as JsonApplier
+from .json_store import Fetcher as JsonFetcher
+from .protocols import Applier, Fetcher
+from .repo import Record as RepoRecord
+from .sqlite_store import Applier as SqliteApplier
+from .sqlite_store import Fetcher as SqliteFetcher
 
 __all__ = [
-    "RepoDbRecord",
-    "apply_noted_events",
-    "get_all_repo_metadata",
-    "get_repo_metadata",
+    "Applier",
+    "Fetcher",
+    "JsonApplier",
+    "JsonFetcher",
+    "RepoRecord",
+    "SqliteApplier",
+    "SqliteFetcher",
     "note_add_event",
     "note_fetch_event",
     "note_reference_clone_event",

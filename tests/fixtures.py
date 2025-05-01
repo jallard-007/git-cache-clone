@@ -17,12 +17,3 @@ def patch_get_git_config():
         return_value={},
     ):
         yield
-
-
-@pytest.fixture(autouse=True)
-def patch_db_apply_events():
-    with mock.patch(
-        "git_cache_clone.metadata.collection._apply_noted_events",
-        return_value=None,
-    ):
-        yield

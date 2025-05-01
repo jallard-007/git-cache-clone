@@ -111,7 +111,7 @@ def main(args: CLIArgumentNamespace) -> int:
     logger.debug("running clone subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
-    print(args.retry)
+
     if not args.uri:
         # should never get here as long as arg parse setup is correct
         raise ValueError
