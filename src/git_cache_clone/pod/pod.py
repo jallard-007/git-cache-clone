@@ -11,29 +11,40 @@ logger = get_logger(__name__)
 class Pod:
     def __init__(self, pod_dir: Path) -> None:
         self._pod_dir = pod_dir
-        self._repo_dir = pod_dir / filenames.REPO_DIR
-        self._lock_file_path = pod_dir / filenames.REPO_LOCK
-        self._last_used_file_path = pod_dir / filenames.REPO_USED
 
     @classmethod
     def from_uri(cls, root_dir: Path, uri: str) -> "Pod":
         return cls(get_repo_pod_dir(root_dir, uri))
 
     @property
-    def pod_dir(self) -> Path:
+    def dir(self) -> Path:
         return self._pod_dir
 
     @property
     def repo_dir(self) -> Path:
-        return self._repo_dir
+        return self._pod_dir / filenames.REPO_DIR
 
     @property
-    def lock_file_path(self) -> Path:
-        return self._lock_file_path
+    def repo_lock_file_path(self) -> Path:
+        return self._pod_dir / filenames.REPO_LOCK
 
     @property
     def last_used_file_path(self) -> Path:
-        return self._last_used_file_path
+        return self._pod_dir / filenames.REPO_USED
+
+    @property
+    def dependent_repos_file_path(self) -> Path:
+        return self._pod_dir / filenames.DEPENDENT_REPOS
+
+    @property
+    def dependent_repos_lock_file_path(self) -> Path:
+        return self._pod_dir / filenames.DEPENDENT_REPOS_LOCK
+
+    def remove_from_disk(self) -> None:
+        remove_pod_from_disk(self.dir)
+
+    def mark_used(self) -> None:
+        mark_repo_used(self.dir)
 
 
 def remove_pod_from_disk(repo_pod_dir: Path) -> None:

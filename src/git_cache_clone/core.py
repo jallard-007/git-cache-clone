@@ -6,7 +6,7 @@ from git_cache_clone import metadata
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.errors import GitCacheError, GitCacheErrorType
-from git_cache_clone.pod import get_repo_pod_dir, mark_repo_used, remove_pod_from_disk
+from git_cache_clone.pod import Pod
 from git_cache_clone.result import Result
 from git_cache_clone.types import CloneMode
 from git_cache_clone.utils import git
@@ -19,25 +19,25 @@ logger = get_logger(__name__)
 # region add
 
 
-def _clean_up_failed_attempt_clone_repo(lock: FileLock, repo_pod_dir: Path) -> None:
+def _clean_up_failed_attempt_clone_repo(lock: FileLock, pod: Pod) -> None:
     lock.check_exists_on_release = False
     try:
-        remove_pod_from_disk(repo_pod_dir)
+        pod.remove_from_disk()
     except Exception as ex:
         logger.warning("failed to clean up: %s", str(ex))
 
 
 def _attempt_clone_repo(
-    repo_pod_dir: Path, uri: str, clone_mode: CloneMode, clone_args: Optional[List[str]]
+    pod: Pod, uri: str, clone_mode: CloneMode, clone_args: Optional[List[str]]
 ) -> Optional[GitCacheError]:
-    repo_pod_dir.mkdir(parents=True, exist_ok=True)
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    pod.dir.mkdir(parents=True, exist_ok=True)
+    repo_dir = pod.repo_dir
     if repo_dir.exists():
         return GitCacheError.repo_already_exists(uri)
 
-    logger.debug("adding %s to cache at %s", uri, repo_pod_dir)
+    logger.debug("adding %s to cache at %s", uri, pod.dir)
 
-    git_args = ["-C", str(repo_pod_dir)]
+    git_args = ["-C", str(pod.dir)]
 
     our_clone_args = [uri, filenames.REPO_DIR, f"--{clone_mode}"]
 
@@ -63,11 +63,11 @@ def _add_or_refresh_locked_repo(
     clone_args: Optional[List[str]],
     refresh_if_exists: bool,
 ) -> Optional[GitCacheError]:
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
+    pod = Pod.from_uri(config.root_dir, uri)
     try:
-        error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, clone_args)
+        error = _attempt_clone_repo(pod, uri, config.clone_mode, clone_args)
     except BaseException:
-        _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
+        _clean_up_failed_attempt_clone_repo(lock, pod)
         raise
 
     if error is None:
@@ -75,10 +75,10 @@ def _add_or_refresh_locked_repo(
 
     if error.type == GitCacheErrorType.REPO_ALREADY_EXISTS:
         if refresh_if_exists:
-            return _attempt_repo_fetch(repo_pod_dir, fetch_args=None)
+            return _attempt_repo_fetch(pod, fetch_args=None)
 
     elif error.type == GitCacheErrorType.GIT_COMMAND_FAILED:
-        _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
+        _clean_up_failed_attempt_clone_repo(lock, pod)
 
     return error
 
@@ -100,16 +100,16 @@ def _add_or_refresh_repo(
         errors of type REPO_ALREADY_EXISTS or GIT_COMMAND_FAILURE, or None
 
     """
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
+    pod = Pod.from_uri(config.root_dir, uri)
 
-    if (repo_pod_dir / filenames.REPO_DIR).is_dir():
+    if pod.repo_dir.is_dir():
         return GitCacheError.repo_already_exists(uri)
 
     def action(lock: FileLock) -> Optional[GitCacheError]:
         with LogSection("add/refresh -- critical zone"):
             return _add_or_refresh_locked_repo(lock, config, uri, clone_args, refresh_if_exists)
 
-    return _locked_action_none_return(config=config, repo_pod_dir=repo_pod_dir, fn=action)
+    return _locked_action_none_return(config=config, lock_file=pod.repo_lock_file_path, fn=action)
 
 
 def add(
@@ -133,10 +133,8 @@ def add(
 # region refresh
 
 
-def _attempt_repo_fetch(
-    repo_pod_dir: Path, fetch_args: Optional[List[str]]
-) -> Optional[GitCacheError]:
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
+def _attempt_repo_fetch(pod: Pod, fetch_args: Optional[List[str]]) -> Optional[GitCacheError]:
+    repo_dir = pod.repo_dir
     if not repo_dir.exists():
         return GitCacheError.repo_not_found("")
 
@@ -164,8 +162,8 @@ def _refresh_or_add_locked_repo(
     fetch_args: Optional[List[str]],
     allow_create: bool,
 ) -> Optional[GitCacheError]:
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    error = _attempt_repo_fetch(repo_pod_dir, fetch_args)
+    pod = Pod.from_uri(config.root_dir, uri)
+    error = _attempt_repo_fetch(pod, fetch_args)
     if error is None:
         return None
 
@@ -174,13 +172,13 @@ def _refresh_or_add_locked_repo(
 
     # the repo does not exist and we can create one ...
     try:
-        error = _attempt_clone_repo(repo_pod_dir, uri, config.clone_mode, None)
+        error = _attempt_clone_repo(pod, uri, config.clone_mode, None)
     except BaseException:
-        _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
+        _clean_up_failed_attempt_clone_repo(lock, pod)
         raise
 
     if error is not None and error.type == GitCacheErrorType.GIT_COMMAND_FAILED:
-        _clean_up_failed_attempt_clone_repo(lock, repo_pod_dir)
+        _clean_up_failed_attempt_clone_repo(lock, pod)
 
     return error
 
@@ -202,8 +200,8 @@ def _refresh_or_add_repo(
     Returns:
         errors of type REPO_NOT_FOUND or GIT_COMMAND_FAILURE, or None
     """
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    pod = Pod.from_uri(config.root_dir, uri)
+    repo_dir = pod.repo_dir
     if not repo_dir.exists() and not allow_add:
         return GitCacheError.repo_not_found(uri)
 
@@ -211,23 +209,23 @@ def _refresh_or_add_repo(
         with LogSection("refresh/add -- critical zone"):
             return _refresh_or_add_locked_repo(lock, config, uri, fetch_args, allow_add)
 
-    return _locked_action_none_return(config=config, repo_pod_dir=repo_pod_dir, fn=action)
+    return _locked_action_none_return(config=config, lock_file=pod.repo_lock_file_path, fn=action)
 
 
 def _refresh_repo(
     config: GitCacheConfig,
-    repo_pod_dir: Path,
+    pod: Pod,
     fetch_args: Optional[List[str]],
 ) -> Optional[GitCacheError]:
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    repo_dir = pod.repo_dir
     if not repo_dir.exists():
         return GitCacheError.repo_not_found("")
 
     def action(_: FileLock) -> Optional[GitCacheError]:
         with LogSection("refresh -- critical zone"):
-            return _attempt_repo_fetch(repo_pod_dir, fetch_args)
+            return _attempt_repo_fetch(pod, fetch_args)
 
-    return _locked_action_none_return(config=config, repo_pod_dir=repo_pod_dir, fn=action)
+    return _locked_action_none_return(config=config, lock_file=pod.repo_lock_file_path, fn=action)
 
 
 def refresh(
@@ -267,11 +265,12 @@ def refresh_all(
     repo_pod_dirs = repos_dir.glob("*/")
     # to-do: do in parallel
     for repo_pod_dir in repo_pod_dirs:
-        if (repo_pod_dir / filenames.REPO_DIR).exists():
+        pod = Pod(repo_pod_dir)
+        if pod.repo_dir.exists():
             try:
                 error = _refresh_repo(
                     config,
-                    repo_pod_dir,
+                    pod,
                     fetch_args=fetch_args,
                 )
                 if error:
@@ -315,20 +314,20 @@ def _standard_clone(
 
 
 def _attempt_reference_clone(
-    repo_pod_dir: Path,
+    pod: Pod,
     uri: str,
     dest: Optional[str],
     dissociate: bool,
     clone_args: Optional[List[str]],
 ) -> Optional[GitCacheError]:
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    repo_dir = pod.repo_dir
 
     if not repo_dir.is_dir():
         return GitCacheError.repo_not_found(uri)
 
     logger.debug("cloning with reference to %s", repo_dir)
 
-    mark_repo_used(repo_pod_dir)
+    pod.mark_used()
 
     clone_args_ = [
         "--reference",
@@ -373,21 +372,23 @@ def _reference_clone(
     Returns:
         GitCacheError or None
     """
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    if not (repo_pod_dir.is_dir() and (repo_pod_dir / filenames.REPO_DIR).is_dir()):
+    pod = Pod.from_uri(config.root_dir, uri)
+    if not (pod.dir.is_dir() and pod.repo_dir.is_dir()):
         return GitCacheError.repo_not_found(uri)
 
     def action(_: FileLock) -> Optional[GitCacheError]:
         with LogSection("reference clone -- critical zone"):
             return _attempt_reference_clone(
-                repo_pod_dir,
+                pod,
                 uri,
                 dest,
                 dissociate,
                 clone_args,
             )
 
-    return _locked_action_none_return(config, repo_pod_dir, action, shared=True)
+    return _locked_action_none_return(
+        config, lock_file=pod.repo_lock_file_path, fn=action, shared=True
+    )
 
 
 def clone(
@@ -433,7 +434,7 @@ def clone(
 # region clean
 
 
-def _was_used_within(repo_pod_dir: Path, days: int) -> bool:
+def _was_used_within(pod: Pod, days: int) -> bool:
     """Checks if a repo directory was used within a certain number of days.
 
     Args:
@@ -443,7 +444,7 @@ def _was_used_within(repo_pod_dir: Path, days: int) -> bool:
     Returns:
         True if the repo was used within the specified number of days, False otherwise.
     """
-    marker = repo_pod_dir / filenames.REPO_USED
+    marker = pod.last_used_file_path
     try:
         last_used = marker.stat().st_mtime
         return (time.time() - last_used) < days * 86400
@@ -454,27 +455,25 @@ def _was_used_within(repo_pod_dir: Path, days: int) -> bool:
 
 def _remove_repo_pod_dir(
     config: GitCacheConfig,
-    repo_pod_dir: Path,
+    pod: Pod,
     unused_for: Optional[int],
 ) -> Optional[GitCacheError]:
-    if not repo_pod_dir.is_dir() or (
-        unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
-    ):
-        logger.debug("repo %s has been used; not removing", repo_pod_dir)
+    if not pod.dir.is_dir() or (unused_for is not None and _was_used_within(pod, unused_for)):
+        logger.debug("repo %s has been used; not removing", pod.dir)
         return None
 
     def action(_: FileLock) -> Optional[GitCacheError]:
         with LogSection("remove repo -- critical zone"):
-            if not repo_pod_dir.is_dir() or (
-                unused_for is not None and _was_used_within(repo_pod_dir, unused_for)
+            if not pod.dir.is_dir() or (
+                unused_for is not None and _was_used_within(pod, unused_for)
             ):
-                logger.debug("repo %s has been used; not removing", repo_pod_dir)
+                logger.debug("repo %s has been used; not removing", pod.dir)
                 return None
 
-            repo_dir = repo_pod_dir / filenames.REPO_DIR
+            repo_dir = pod.repo_dir
             uri = git.get_repo_remote_url(repo_dir)
             try:
-                remove_pod_from_disk(repo_pod_dir)
+                pod.remove_from_disk()
             except OSError as ex:
                 # TODO. handle this properly. was the repo itself removed, or did just the pod dir fail?
                 logger.warning("failed to remove directory %s", ex)
@@ -486,7 +485,7 @@ def _remove_repo_pod_dir(
             return None
 
     return _locked_action_none_return(
-        config=config, repo_pod_dir=repo_pod_dir, fn=action, check_exists_on_release=False
+        config=config, lock_file=pod.repo_lock_file_path, fn=action, check_exists_on_release=False
     )
 
 
@@ -499,11 +498,11 @@ def clean(
     if not uri:
         return GitCacheError.invalid_argument("missing uri argument")
 
-    repo_pod_dir = get_repo_pod_dir(config.root_dir, uri)
-    if not repo_pod_dir.is_dir():
+    pod = Pod.from_uri(config.root_dir, uri)
+    if not pod.dir.is_dir():
         return GitCacheError.repo_not_found(uri)
 
-    error = _remove_repo_pod_dir(config, repo_pod_dir, unused_for)
+    error = _remove_repo_pod_dir(config, pod, unused_for)
     if not metadata_applier:
         metadata_applier = metadata.SqliteApplier()
     db_err = metadata_applier.apply_events(config)
@@ -530,7 +529,8 @@ def clean_all(
     repos_dir = config.root_dir / filenames.REPOS_DIR
     repo_pod_dirs = repos_dir.glob("*/")
     for repo_pod_dir in repo_pod_dirs:
-        error = _remove_repo_pod_dir(config, repo_pod_dir, unused_for)
+        pod = Pod(repo_pod_dir)
+        error = _remove_repo_pod_dir(config, pod, unused_for)
         if error:
             logger.warning(error)
 
@@ -589,14 +589,14 @@ def info_all(
 
 def _locked_action_none_return(
     config: GitCacheConfig,
-    repo_pod_dir: Path,
+    lock_file: Path,
     fn: Callable[[FileLock], Optional[GitCacheError]],
     shared: bool = False,
     retry_count: int = 5,
     check_exists_on_release: bool = True,
 ) -> Optional[GitCacheError]:
     lock = FileLock(
-        repo_pod_dir / filenames.REPO_LOCK if config.use_lock else None,
+        lock_file if config.use_lock else None,
         shared=shared,
         wait_timeout=config.lock_wait_timeout,
         retry_count=retry_count,

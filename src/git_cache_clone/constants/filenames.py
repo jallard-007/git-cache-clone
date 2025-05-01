@@ -1,4 +1,4 @@
-REPO_LOCK = ".git-cache-lock"
+REPO_LOCK = "repo.lock"
 """lock file name in cache dir"""
 
 REPO_USED = ".git-cache-used"
@@ -13,4 +13,7 @@ METADATA_SQLITE_DB = "metadata.sqlite"
 METADATA_SQLITE_DB_LOCK = f"{METADATA_SQLITE_DB}.lock"
 
 METADATA_JSON_DB = "metadata.json"
-METADATA_JSON_DB_LOCK = "metadata.json.lock"
+METADATA_JSON_DB_LOCK = f"{METADATA_JSON_DB}.lock"
+
+DEPENDENT_REPOS = "dependent.json"
+DEPENDENT_REPOS_LOCK = f"{DEPENDENT_REPOS}.lock"
