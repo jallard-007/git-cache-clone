@@ -6,6 +6,7 @@ from git_cache_clone import core
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.errors import GitCacheErrorType
+from git_cache_clone.pod import Pod
 
 # region fixtures
 
@@ -51,7 +52,8 @@ def gc_config(tmp_path):
 def test_attempt_repo_fetch_success(tmp_path, mocked_run_git_command):
     repo_dir = tmp_path / filenames.REPO_DIR
     repo_dir.mkdir()
-    result = core._attempt_repo_fetch(tmp_path, None)
+    pod = Pod(tmp_path)
+    result = core._attempt_repo_fetch(pod, None)
     assert result is None
     mocked_run_git_command.assert_any_call(
         ["-C", str(repo_dir)], command="fetch", command_args=None
@@ -59,7 +61,8 @@ def test_attempt_repo_fetch_success(tmp_path, mocked_run_git_command):
 
 
 def test_attempt_repo_fetch_not_found(tmp_path, mocked_run_git_command):
-    result = core._attempt_repo_fetch(tmp_path, None)
+    pod = Pod(tmp_path)
+    result = core._attempt_repo_fetch(pod, None)
     assert result is not None
     assert result.type == GitCacheErrorType.REPO_NOT_FOUND
     mocked_run_git_command.assert_not_called()
@@ -69,7 +72,8 @@ def test_attempt_repo_fetch_git_command_failed(tmp_path, mocked_run_git_command)
     repo_dir = tmp_path / filenames.REPO_DIR
     repo_dir.mkdir()
     mocked_run_git_command.return_value.returncode = 1
-    result = core._attempt_repo_fetch(tmp_path, None)
+    pod = Pod(tmp_path)
+    result = core._attempt_repo_fetch(pod, None)
     assert result is not None
     assert result.type == GitCacheErrorType.GIT_COMMAND_FAILED
     mocked_run_git_command.assert_called_once()

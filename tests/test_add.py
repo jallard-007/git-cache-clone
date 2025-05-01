@@ -6,6 +6,7 @@ from git_cache_clone import core
 from git_cache_clone.config import GitCacheConfig
 from git_cache_clone.constants import filenames
 from git_cache_clone.errors import GitCacheErrorType
+from git_cache_clone.pod import Pod
 from tests.t_utils import create_empty_git_repo
 
 # region fixtures
@@ -52,7 +53,8 @@ def test_attempt_clone_repo_success(tmp_path, mocked_run_git_command):
     clone_mode = "bare"
     extra_args = ["--foo"]
     mocked_run_git_command.return_value.returncode = 0
-    result = core._attempt_clone_repo(tmp_path, uri, clone_mode, extra_args)
+    pod = Pod(tmp_path)
+    result = core._attempt_clone_repo(pod, uri, clone_mode, extra_args)
     assert result is None
     clone_args = [uri, filenames.REPO_DIR, f"--{clone_mode}"] + extra_args
     mocked_run_git_command.assert_called_once_with(["-C", str(tmp_path)], "clone", clone_args)
@@ -61,7 +63,8 @@ def test_attempt_clone_repo_success(tmp_path, mocked_run_git_command):
 def test_attempt_clone_repo_already_exists(tmp_path, mocked_run_git_command):
     (tmp_path / filenames.REPO_DIR).mkdir()
     mocked_run_git_command.return_value.returncode = 0
-    result = core._attempt_clone_repo(tmp_path, "uri", "bare", None)
+    pod = Pod(tmp_path)
+    result = core._attempt_clone_repo(pod, "uri", "bare", None)
     assert result is not None
     assert result.type == GitCacheErrorType.REPO_ALREADY_EXISTS
     mocked_run_git_command.assert_not_called()
@@ -69,7 +72,8 @@ def test_attempt_clone_repo_already_exists(tmp_path, mocked_run_git_command):
 
 def test_attempt_clone_repo_git_command_failed(tmp_path, mocked_run_git_command):
     mocked_run_git_command.return_value.returncode = 1
-    result = core._attempt_clone_repo(tmp_path, "uri", "bare", None)
+    pod = Pod(tmp_path)
+    result = core._attempt_clone_repo(pod, "uri", "bare", None)
     assert result is not None
     assert result.type == GitCacheErrorType.GIT_COMMAND_FAILED
     mocked_run_git_command.assert_called_once()
