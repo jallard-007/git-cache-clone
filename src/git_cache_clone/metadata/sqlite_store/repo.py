@@ -105,7 +105,7 @@ def apply_repo_events(
             db_record = RepoRecord(normalized_uri)
 
         for event in events:
-            event.apply_to_record(db_record)
+            db_record = event.apply_to_record(db_record)
 
         if result.value is None:
             insert(conn, db_record)

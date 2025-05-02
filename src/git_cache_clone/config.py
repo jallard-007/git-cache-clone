@@ -3,7 +3,7 @@ from typing import Any, Optional
 
 from git_cache_clone.cli.arguments import CLIArgumentNamespace
 from git_cache_clone.constants import defaults, keys
-from git_cache_clone.types import CLONE_MODES, CloneMode
+from git_cache_clone.types import CLONE_MODES, METADATA_STORE_MODES, CloneMode, MetadataStoreMode
 from git_cache_clone.utils.git import get_git_config_value
 from git_cache_clone.utils.logging import get_logger
 
@@ -17,6 +17,7 @@ class GitCacheConfig:
         use_lock: Optional[bool] = None,
         lock_wait_timeout: Optional[int] = None,
         clone_mode: Optional[CloneMode] = None,
+        metadata_store_mode: Optional[MetadataStoreMode] = None,
     ) -> None:
         self._root_dir = root_dir if root_dir is not None else Path(get_root_dir())
         self._use_lock = use_lock if use_lock is not None else get_use_lock()
@@ -24,14 +25,18 @@ class GitCacheConfig:
             lock_wait_timeout if lock_wait_timeout is not None else get_lock_wait_timeout()
         )
         self._clone_mode = clone_mode if clone_mode is not None else get_clone_mode()
+        self._metadata_store_mode = (
+            metadata_store_mode if metadata_store_mode is not None else get_store_mode()
+        )
 
     @classmethod
     def from_cli_namespace(cls, args: CLIArgumentNamespace) -> "GitCacheConfig":
         root_dir = Path(args.root_dir) if args.root_dir is not None else None
         use_lock = args.use_lock
         lock_timeout = args.lock_timeout
+        store_mode = args.store_mode
         clone_mode = args.clone_mode if (hasattr(args, "clone_mode")) else None
-        return cls(root_dir, use_lock, lock_timeout, clone_mode)
+        return cls(root_dir, use_lock, lock_timeout, clone_mode, store_mode)
 
     @property
     def root_dir(self) -> Path:
@@ -49,21 +54,28 @@ class GitCacheConfig:
     def clone_mode(self) -> CloneMode:
         return self._clone_mode
 
+    @property
+    def metadata_store_mode(self) -> MetadataStoreMode:
+        return self._metadata_store_mode
+
     def __eq__(self, value: Any) -> bool:  # noqa: ANN401
         if not isinstance(value, type(self)):
-            return False
-        return (
-            self._root_dir == value._root_dir
-            and self._lock_wait_timeout == value._lock_wait_timeout
-            and self._use_lock == value._use_lock
-            and self._clone_mode == value._clone_mode
-        )
+            return NotImplemented
+        return vars(self) == vars(value)
 
     def __repr__(self) -> str:
-        return (
-            f"GitCacheConfig(root = {self.root_dir}, lock = {self.use_lock},"
-            f" ltimeout ={self.lock_wait_timeout}, cmode = {self._clone_mode})"
-        )
+        """copied from argparse source"""
+        type_name = type(self).__name__
+        arg_strings = []
+        star_args = {}
+        for name, value in list(self.__dict__.items()):
+            if name.isidentifier():
+                arg_strings.append(f"{name}={repr(value)}")
+            else:
+                star_args[name] = value
+        if star_args:
+            arg_strings.append(f"**{repr(star_args)}")
+        return f"{type_name}({', '.join(arg_strings)})"
 
 
 def get_root_dir() -> str:
@@ -88,7 +100,11 @@ def get_lock_wait_timeout() -> int:
 
 
 def get_clone_mode() -> CloneMode:
-    return get_clone_mode_from_git_config() or defaults.CLONE_MODE  # type: ignore
+    return get_clone_mode_from_git_config() or defaults.CLONE_MODE
+
+
+def get_store_mode() -> MetadataStoreMode:
+    return get_metadata_store_mode_from_git_config() or defaults.METADATA_STORE_MODE
 
 
 def get_root_dir_from_git_config() -> Optional[str]:
@@ -150,3 +166,23 @@ def get_lock_timeout_from_git_config() -> Optional[int]:
     except ValueError as ex:
         logger.warning("%s: %s", key, ex)
         return None
+
+
+def get_metadata_store_mode_from_git_config() -> Optional[MetadataStoreMode]:
+    """Gets store mode from Git configuration.
+
+    Returns:
+        returns the store mode if a valid one is provide, else None
+    """
+    key = keys.GIT_CONFIG_METADATA_STORE_MODE
+    store_mode = get_git_config_value(key)
+    if store_mode:
+        store_mode = store_mode.lower().strip()
+        if store_mode in METADATA_STORE_MODES:
+            return store_mode  # type: ignore
+
+        logger.warning(
+            ("%s %s not one of %s", key, store_mode, METADATA_STORE_MODES),
+        )
+
+    return None

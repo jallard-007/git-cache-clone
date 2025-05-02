@@ -76,6 +76,7 @@ def main(args: CLIArgumentNamespace) -> int:
     logger.debug("running refresh subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
+    logger.debug(config)
 
     if args.all:
         refresh_all(config=config, fetch_args=args.forwarded_args)

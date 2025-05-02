@@ -7,3 +7,6 @@ else:
 
 CloneMode = Literal["bare", "mirror"]
 CLONE_MODES = {"bare", "mirror"}
+
+MetadataStoreMode = Literal["json", "sqlite", "none"]
+METADATA_STORE_MODES = {"json", "sqlite", "none"}

@@ -72,6 +72,7 @@ def main(
     logger.debug("running clean subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
+    logger.debug(config)
 
     if args.all:
         clean_all(config=config, unused_for=args.unused_for)

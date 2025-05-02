@@ -15,8 +15,10 @@ logger = get_logger(__name__)
 
 
 class Applier:
-    @staticmethod
-    def apply_events(config: GitCacheConfig) -> Optional[GitCacheError]:
+    def __init__(self, config: GitCacheConfig) -> None:
+        self.config = config
+
+    def apply_events(self) -> Optional[GitCacheError]:
         from git_cache_clone.metadata.sqlite_store import db, repo
 
         events_dict = collection.get_repo_events()
@@ -26,7 +28,7 @@ class Applier:
         def action(conn: "sqlite3.Connection") -> None:
             repo.apply_repo_events(conn, events_dict)
 
-        result: Result[None] = db.locked_operation(config, func=action)
+        result: Result[None] = db.locked_operation(self.config, func=action)
         if result.is_ok():
             return None
 
@@ -34,21 +36,22 @@ class Applier:
 
 
 class Fetcher:
-    @staticmethod
-    def get_all_repo_metadata(config: GitCacheConfig) -> Result[List[RepoRecord]]:
+    def __init__(self, config: GitCacheConfig) -> None:
+        self.config = config
+
+    def get_all_repo_metadata(self) -> Result[List[RepoRecord]]:
         from git_cache_clone.metadata.sqlite_store import db, repo
 
         def get_items(conn: "sqlite3.Connection") -> Result[List[RepoRecord]]:
             return repo.select_all(conn)
 
-        return db.locked_operation(config, get_items)
+        return db.locked_operation(self.config, get_items)
 
-    @staticmethod
-    def get_repo_metadata(config: GitCacheConfig, uri: str) -> Result[Optional[RepoRecord]]:
+    def get_repo_metadata(self, uri: str) -> Result[Optional[RepoRecord]]:
         from git_cache_clone.metadata.sqlite_store import db, repo
 
         def get_item(conn: "sqlite3.Connection") -> Result[Optional[RepoRecord]]:
             n_uri = normalize_git_uri(uri)
             return repo.select(conn, n_uri)
 
-        return db.locked_operation(config, get_item)
+        return db.locked_operation(self.config, get_item)

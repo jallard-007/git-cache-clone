@@ -31,7 +31,7 @@ def apply_repo_events(json_obj: dict, events_dict: Mapping[str, Iterable[RepoEve
         record = RepoRecord.from_json_obj(record_dict)
 
         for event in events:
-            event.apply_to_record(record)
+            record = event.apply_to_record(record)
 
         record_dict = record.to_json_obj()
         # don't include normalized_uri in the json object as it's redundant
@@ -40,14 +40,16 @@ def apply_repo_events(json_obj: dict, events_dict: Mapping[str, Iterable[RepoEve
 
 
 class Applier:
-    @staticmethod
-    def apply_events(config: GitCacheConfig) -> Optional[GitCacheError]:
+    def __init__(self, config: GitCacheConfig) -> None:
+        self.config = config
+
+    def apply_events(self) -> Optional[GitCacheError]:
         events_dict = collection.get_repo_events()
         if not events_dict:
             return None
 
         def action() -> None:
-            store_file_path = config.root_dir / filenames.METADATA_JSON_DB
+            store_file_path = self.config.root_dir / filenames.METADATA_JSON_DB
             store_file_path.touch(exist_ok=True)
             with open(store_file_path, "r+") as f:
                 try:
@@ -58,7 +60,7 @@ class Applier:
                 apply_repo_events(json_obj, events_dict)
                 json.dump(json_obj, f)
 
-        result: Result[None] = locked_operation(config, func=action)
+        result: Result[None] = locked_operation(self.config, func=action)
         if result.is_ok():
             return None
 
@@ -90,9 +92,11 @@ def select_all(json_obj: dict) -> List[RepoRecord]:
 
 
 class Fetcher:
-    @staticmethod
-    def get_all_repo_metadata(config: GitCacheConfig) -> Result[List[RepoRecord]]:
-        store_file_path = config.root_dir / filenames.METADATA_JSON_DB
+    def __init__(self, config: GitCacheConfig) -> None:
+        self.config = config
+
+    def get_all_repo_metadata(self) -> Result[List[RepoRecord]]:
+        store_file_path = self.config.root_dir / filenames.METADATA_JSON_DB
         if not store_file_path.is_file():
             return Result([])
 
@@ -106,11 +110,10 @@ class Fetcher:
 
             return select_all(json_obj)
 
-        return locked_operation(config, get_items)
+        return locked_operation(self.config, get_items)
 
-    @staticmethod
-    def get_repo_metadata(config: GitCacheConfig, uri: str) -> Result[Optional[RepoRecord]]:
-        store_file_path = config.root_dir / filenames.METADATA_JSON_DB
+    def get_repo_metadata(self, uri: str) -> Result[Optional[RepoRecord]]:
+        store_file_path = self.config.root_dir / filenames.METADATA_JSON_DB
         if not store_file_path.is_file():
             return Result(None)
 
@@ -125,7 +128,7 @@ class Fetcher:
 
             return select(json_obj, n_uri)
 
-        return locked_operation(config, get_item)
+        return locked_operation(self.config, get_item)
 
 
 def locked_operation(
