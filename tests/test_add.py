@@ -38,7 +38,7 @@ def mocked_attempt_repo_fetch():
 
 @pytest.fixture
 def gc_config(tmp_path):
-    return GitCacheConfig(tmp_path, True, -1, "bare")
+    return GitCacheConfig(tmp_path, True, -1, "bare", "none")
 
 
 # endregion fixtures
@@ -146,9 +146,9 @@ def test_add_or_refresh_no_refresh(
 def test_add_creates_cache(tmp_path):
     root_dir = tmp_path / "cache"
     repos_dir = root_dir / filenames.REPOS_DIR
-    config = GitCacheConfig(root_dir=root_dir)
+    config = GitCacheConfig(root_dir=root_dir, metadata_store_mode="none")
     repo_path = create_empty_git_repo(tmp_path)
-    result = core.add(config, str(repo_path), metadata_applier=mock.MagicMock())
+    result = core.add(config, str(repo_path))
 
     assert result is None
     assert any(repos_dir.iterdir()), "repos directory should not be empty"

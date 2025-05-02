@@ -64,12 +64,18 @@ def main(
     logger.debug("running info subcommand")
 
     config = GitCacheConfig.from_cli_namespace(args)
+    logger.debug(config)
+
     # TODO
     if args.all:
-        result = info_all(config)
+        result = info_all(config=config)
         if result.is_err():
             print(result.error)
             return 1
+
+        if not result.value:
+            print("nothing in cache")
+            return 0
 
         for r in result.value:
             # TODO: format
@@ -81,7 +87,7 @@ def main(
         # should never get here as long as arg parse setup is correct
         raise ValueError
 
-    res = info(config, args.uri)
+    res = info(config=config, uri=args.uri)
     if res.is_err():
         logger.error(res.error)
         return 1

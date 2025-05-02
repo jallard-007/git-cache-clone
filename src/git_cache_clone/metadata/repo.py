@@ -122,13 +122,14 @@ class AddEvent:
         self.clone_time_sec = clone_time_sec
         self.disk_usage_kb = disk_usage_kb
 
-    def apply_to_record(self, record: Record) -> None:
+    def apply_to_record(self, record: Record) -> Record:
         record.added_date = self.time
         record.last_fetched_date = self.time
         record.repo_dir = self.repo_dir
         record.clone_time_sec = self.clone_time_sec
         record.disk_usage_kb = self.disk_usage_kb
         record.removed_date = None
+        return record
 
 
 class FetchEvent:
@@ -137,11 +138,12 @@ class FetchEvent:
         self.disk_usage_kb = disk_usage_kb
         self.pruned = pruned
 
-    def apply_to_record(self, record: Record) -> None:
+    def apply_to_record(self, record: Record) -> Record:
         record.last_fetched_date = self.time
         record.disk_usage_kb = self.disk_usage_kb
         if self.pruned:
             record.last_pruned_date = self.time
+        return record
 
 
 class UseEvent:
@@ -150,7 +152,7 @@ class UseEvent:
         self.reference_clone_time_sec = reference_clone_time_sec
         self.dependent = dependent
 
-    def apply_to_record(self, record: Record) -> None:
+    def apply_to_record(self, record: Record) -> Record:
         if record.total_num_used is None:
             record.total_num_used = 0
 
@@ -164,14 +166,17 @@ class UseEvent:
             self.reference_clone_time_sec - record.avg_ref_clone_time_sec
         ) / (record.total_num_used)
 
+        return record
+
 
 class RemoveEvent:
     def __init__(self) -> None:
         self.time: datetime.datetime = get_utc_naive_datetime_now()
 
-    def apply_to_record(self, record: Record) -> None:
+    def apply_to_record(self, record: Record) -> Record:
         record.removed_date = self.time
         record.disk_usage_kb = 0
+        return record
 
 
 Event = Union[AddEvent, FetchEvent, RemoveEvent, UseEvent]

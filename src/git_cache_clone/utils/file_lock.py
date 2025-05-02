@@ -270,7 +270,7 @@ def make_lock_file(lock_path: Union[str, "os.PathLike[str]"]) -> None:
         pass
     try:
         # use os.O_EXCL to ensure only one lock file is created
-        os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT))
+        os.close(os.open(lock_path, os.O_EXCL | os.O_CREAT | os.O_RDONLY, 0o644))
         logger.trace("created lock file %s", lock_path)
     except FileExistsError:
         pass

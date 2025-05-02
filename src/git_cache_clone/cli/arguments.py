@@ -2,7 +2,7 @@ import argparse
 from typing import List, Optional
 
 from git_cache_clone.constants import defaults
-from git_cache_clone.types import CloneMode
+from git_cache_clone.types import METADATA_STORE_MODES, CloneMode, MetadataStoreMode
 from git_cache_clone.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,6 +53,11 @@ def get_standard_options_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         help="maximum time (in seconds) to wait for a lock",
     )
+    standard_options_parser.add_argument(
+        "--store-mode",
+        choices=METADATA_STORE_MODES,
+        help="format to store metadata in. defaults to sqlite",
+    )
     return standard_options_parser
 
 
@@ -85,6 +90,7 @@ class CLIArgumentNamespace(argparse.Namespace):
     use_lock: bool
     lock_timeout: int
     clone_mode: CloneMode
+    store_mode: MetadataStoreMode
 
     # all
     uri: Optional[str]

@@ -117,12 +117,10 @@ def add(
     uri: str,
     clone_args: Optional[List[str]] = None,
     refresh_if_exists: bool = False,
-    metadata_applier: Optional[metadata.Applier] = None,
 ) -> Optional[GitCacheError]:
     error = _add_or_refresh_repo(config, uri, clone_args, refresh_if_exists=refresh_if_exists)
-    if not metadata_applier:
-        metadata_applier = metadata.SqliteApplier()
-    db_err = metadata_applier.apply_events(config)
+    metadata_applier = metadata.get_applier(config)
+    db_err = metadata_applier.apply_events()
     if db_err:
         logger.error(db_err)
     return error
@@ -233,7 +231,6 @@ def refresh(
     uri: str,
     fetch_args: Optional[List[str]] = None,
     allow_create: bool = False,
-    metadata_applier: Optional[metadata.Applier] = None,
 ) -> Optional[GitCacheError]:
     if not uri:
         return GitCacheError.invalid_argument("missing uri argument")
@@ -241,9 +238,8 @@ def refresh(
     error = _refresh_or_add_repo(
         config=config, uri=uri, fetch_args=fetch_args, allow_add=allow_create
     )
-    if not metadata_applier:
-        metadata_applier = metadata.SqliteApplier()
-    db_err = metadata_applier.apply_events(config)
+    metadata_applier = metadata.get_applier(config)
+    db_err = metadata_applier.apply_events()
     if db_err:
         logger.error(db_err)
     return error
@@ -252,7 +248,6 @@ def refresh(
 def refresh_all(
     config: GitCacheConfig,
     fetch_args: Optional[List[str]] = None,
-    metadata_applier: Optional[metadata.Applier] = None,
 ) -> None:
     """Refreshes all cached repositories.
 
@@ -279,9 +274,8 @@ def refresh_all(
             except LockError:
                 pass
 
-    if not metadata_applier:
-        metadata_applier = metadata.SqliteApplier()
-    db_err = metadata_applier.apply_events(config)
+    metadata_applier = metadata.get_applier(config)
+    db_err = metadata_applier.apply_events()
     if db_err:
         logger.error(db_err)
 
@@ -400,7 +394,6 @@ def clone(
     allow_add: bool = False,
     refresh_if_exists: bool = False,
     retry_on_fail: bool = False,
-    metadata_applier: Optional[metadata.Applier] = None,
 ) -> Optional[GitCacheError]:
     # can't do everything in the lock as add/fetch are write actions (exclusive lock), but clone is read
     error: Optional[GitCacheError] = None
@@ -421,9 +414,8 @@ def clone(
         logger.warning("%s -- attempting standard clone", error)
         error = _standard_clone(uri, dest, clone_args)
 
-    if not metadata_applier:
-        metadata_applier = metadata.SqliteApplier()
-    db_err = metadata_applier.apply_events(config)
+    metadata_applier = metadata.get_applier(config)
+    db_err = metadata_applier.apply_events()
     if db_err:
         logger.error(db_err)
     return error
@@ -493,7 +485,6 @@ def clean(
     config: GitCacheConfig,
     uri: str,
     unused_for: Optional[int] = None,
-    metadata_applier: Optional[metadata.Applier] = None,
 ) -> Optional[GitCacheError]:
     if not uri:
         return GitCacheError.invalid_argument("missing uri argument")
@@ -503,9 +494,8 @@ def clean(
         return GitCacheError.repo_not_found(uri)
 
     error = _remove_repo_pod_dir(config, pod, unused_for)
-    if not metadata_applier:
-        metadata_applier = metadata.SqliteApplier()
-    db_err = metadata_applier.apply_events(config)
+    metadata_applier = metadata.get_applier(config)
+    db_err = metadata_applier.apply_events()
     if db_err:
         logger.error(db_err)
     return error
@@ -514,7 +504,6 @@ def clean(
 def clean_all(
     config: GitCacheConfig,
     unused_for: Optional[int],
-    metadata_applier: Optional[metadata.Applier] = None,
 ) -> None:
     """Cleans all cached repositories.
 
@@ -534,9 +523,8 @@ def clean_all(
         if error:
             logger.warning(error)
 
-    if not metadata_applier:
-        metadata_applier = metadata.SqliteApplier()
-    db_err = metadata_applier.apply_events(config)
+    metadata_applier = metadata.get_applier(config)
+    db_err = metadata_applier.apply_events()
     if db_err:
         logger.error(db_err)
 
@@ -546,33 +534,25 @@ def clean_all(
 # region info
 
 
-def info(
-    config: GitCacheConfig, uri: str, metadata_fetcher: Optional[metadata.Fetcher] = None
-) -> Result[dict]:
+def info(config: GitCacheConfig, uri: str) -> Result[dict]:
     if not uri:
         return Result(error=GitCacheError.invalid_argument("missing uri argument"))
 
-    if not metadata_fetcher:
-        metadata_fetcher = metadata.SqliteFetcher()
-
-    result = metadata_fetcher.get_repo_metadata(config, uri)
+    metadata_fetcher = metadata.get_fetcher(config)
+    result = metadata_fetcher.get_repo_metadata(uri)
     if result.is_err():
         return Result(error=result.error)
 
     db_record = result.value
     if db_record is None:
-        return Result({})
+        return Result(None)
 
     return Result(db_record.to_dict())
 
 
-def info_all(
-    config: GitCacheConfig, metadata_fetcher: Optional[metadata.Fetcher] = None
-) -> Result[List[dict]]:
-    if not metadata_fetcher:
-        metadata_fetcher = metadata.SqliteFetcher()
-
-    result = metadata_fetcher.get_all_repo_metadata(config)
+def info_all(config: GitCacheConfig) -> Result[List[dict]]:
+    metadata_fetcher = metadata.get_fetcher(config)
+    result = metadata_fetcher.get_all_repo_metadata()
     if result.is_err():
         return Result(error=result.error)
 
