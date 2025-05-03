@@ -93,8 +93,11 @@ def main(args: Optional[List[str]] = None) -> int:
     except KeyboardInterrupt:
         logger.info("stopping; interrupted")
         return -1
+    except PermissionError as ex:
+        logger.error("%s", ex)  # noqa: TRY400
+        return -1
     except Exception:
-        logger.exception("uncaught exception")
+        logger.critical("uncaught exception!")
         return -1
 
 

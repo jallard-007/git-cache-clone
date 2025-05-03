@@ -1,11 +1,11 @@
 # git-cache-clone
 
-`git-cache` is a CLI tool that wraps `git clone` to accelerate repository cloning by caching previously cloned repositories locally. It speeds up CI/CD pipelines and repetitive development workflows by avoiding redundant downloads.
+`git-cache-clone` is a drop-in wrapper for `git clone` that accelerates repository cloning by using a local cache. It's designed to optimize CI pipelines and repetitive local workflows by avoiding redundant network fetches.
 
 ## Features
 
 - Fast `git clone` via `--reference`
-- Subcommands for `clone`, `clean`, `refresh`, `add`
+- Subcommands for `clone`, `clean`, `refresh`, `add`, `info`
 - Handles concurrent operations on cache entries via file locks
 - Managed cache directory
 - Safe and explicit cache cleanup
@@ -21,57 +21,55 @@ pip3 install git-cache-clone
 
 Various subcommands are available. When no subcommand is provided, `clone` is assumed.
 
-`git cache add` - add a repository to cache
+- `git cache clone` - Clone a repository using the cache; adds to cache if missing
+- `git cache add` - Add a repository to the cache manually
+- `git cache clean` - Remove cached repositories
+- `git cache refresh` - Run `git fetch` on cached repositories
+- `git cache info` - Show details on cache contents
 
-`git cache clone` - clone a repository using the cache, adding it if it doesn't exist
-
-`git cache clean` - clean the cache
-
-`git cache refresh` - refresh cache entries by fetching from origin
-
-Using the `--dissociate` option is recommended when using the `clone` command in environments where the cached in regularly cleaned or refreshed, as otherwise your clone will likely break.
+By default, 
 
 ### Note on Argument Parsing
 
-Unlike Git, this tool assumes that the first non-option argument (i.e., the first value that does not start with a dash -) is the repository URL. This excludes options that are native to git-cache
+`git-cache-clone` accepts its own options and subcommands. To pass arguments directly to the underlying `git` command, you **must** use `--`. Everything after `--` is forwarded verbatim.
 
-As a result, the following standard Git usage:
-
+#### ✅ Correct usage:
 ```bash
-# Do not do this
-git cache --long-opt Arg <url>
-git cache -o Arg <url>
+git cache clone <url> -- --depth=1
+git cache refresh <url> -- --unshallow
 ```
 
-will be misinterpreted by git cache — the tool would treat 1 as the URL, and the actual URL as the destination path.
-
-To avoid this, either use the stuck form or specify the repository URL first, before any options:
-
-```bash
-# Do this instead
-git cache --long-opt=Arg <url> 
-git cache -oArg <url> 
-git cache <url> --long-opt Arg
+#### ❌ Incorrect usage:
 ```
-This ordering ensures correct argument parsing.
+git cache clone --depth=1 <url>
+git cache refresh --unshallow <url>
+```
 
 ## Configuration
 
-See all options by running `git cache -h`
+Run `git cache -h` to see all available subcommands and their options.
 
-Some options can also be configured using git config:
+Some widely used configurations can be set via environment variables and git config:
 
-```bash
-git config --global key value
-```
+| Env Variable                    | Git Config Key                | Type     | Valid Values / Description                    | Default                  |
+| ------------------------------- | ----------------------------  | -------- | --------------------------------------------- | ------------------------ |
+| `GIT_CACHE_ROOT_DIR`            | `gitcache.rootdir`            | `path`   | working directory of git-cache-clone          | ~/.local/share/git-cache |
+| `GIT_CACHE_USE_LOCK`            | `gitcache.uselock`            | `bool`   | `true`, `1`, `y`, `yes`                       | `true`                   |
+| `GIT_CACHE_LOCK_TIMEOUT`        | `gitcache.locktimeout`        | `number` | timeout in seconds to wait for a lock         | -1                       |
+| `GIT_CACHE_CLONE_MODE`          | `gitcache.clonemode`          | `string` | `bare`, `mirror`                              | `bare`                   |
+| `GIT_CACHE_METADATA_STORE_MODE` | `gitcache.metadatastoremode`  | `string` | `sqlite`, `json`, `none`                      | `sqlite`                 |
 
-- Root dir: `cacheclone.rootdir`
+### ⚙️ Option Precedence
 
-- Clone mode: `cacheclone.clonemode` ("bare" or "mirror")
+When resolving configuration values, `git-cache-clone` applies the following precedence, from highest to lowest:
 
-- Use file locking: `cacheclone.uselock` ("y", "yes", "true", "1" for yes, else no)
+1. Command-line arguments
 
-- Lock acquire timeout: `cacheclone.locktimeout` (any valid integer)
+2. Environment variables
+
+3. Git configuration (git config)
+
+4. Built-in defaults
 
 ## Requirements
 

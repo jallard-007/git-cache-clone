@@ -54,8 +54,9 @@ def get_standard_options_parser() -> argparse.ArgumentParser:
         help="maximum time (in seconds) to wait for a lock",
     )
     standard_options_parser.add_argument(
-        "--store-mode",
+        "--metadata-store-mode",
         choices=METADATA_STORE_MODES,
+        dest="store_mode",
         help="format to store metadata in. defaults to sqlite",
     )
     return standard_options_parser

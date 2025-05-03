@@ -158,7 +158,7 @@ def normalize_uri(uri: str, strict: bool = False) -> str:
     local_uri_path = Path("/") / parsed.netloc / parsed.path.strip("/")
     full_path = local_uri_path.resolve()
 
-    path_hash = hashlib.sha1(str(full_path).encode(), usedforsecurity=False).hexdigest()[:10]
+    path_hash = hashlib.sha256(str(full_path).encode()).hexdigest()[:10]
     return f"local-{full_path.name}-{path_hash}"
 
 

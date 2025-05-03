@@ -206,7 +206,16 @@ def test_add_cache_already_exists_and_refreshes(tmp_path):
 
     commit_msg1 = "testing"
     subprocess.run(
-        ["git", "-C", str(repo_path), "commit", "--allow-empty", "-m", commit_msg1], check=False
+        [
+            "git",
+            "-C",
+            str(repo_path),
+            "commit",
+            "--allow-empty",
+            "-m",
+            commit_msg1,
+        ],
+        check=False,
     )
 
     # add repo to cache
@@ -217,7 +226,7 @@ def test_add_cache_already_exists_and_refreshes(tmp_path):
 
     # check that pod repo has commit
     res = subprocess.run(
-        f"git -C {pod_repo_dir} log -1 --pretty=%B", shell=True, capture_output=True, check=False
+        f"git -C {pod_repo_dir} log -1 --pretty=%B", shell=True, stdout=subprocess.PIPE, check=False
     )
     assert res.returncode == 0
     assert res.stdout.decode().strip() == commit_msg1
@@ -225,7 +234,16 @@ def test_add_cache_already_exists_and_refreshes(tmp_path):
     # add new commit to source repo
     commit_msg2 = "testing2"
     subprocess.run(
-        ["git", "-C", str(repo_path), "commit", "--allow-empty", "-m", commit_msg2], check=False
+        [
+            "git",
+            "-C",
+            str(repo_path),
+            "commit",
+            "--allow-empty",
+            "-m",
+            commit_msg2,
+        ],
+        check=False,
     )
 
     # rerun add with refresh option
@@ -236,7 +254,7 @@ def test_add_cache_already_exists_and_refreshes(tmp_path):
     res = subprocess.run(
         f"git -C {pod_repo_dir} log -1 --pretty=%B FETCH_HEAD",
         shell=True,
-        capture_output=True,
+        stdout=subprocess.PIPE,
         check=False,
     )
     assert res.returncode == 0

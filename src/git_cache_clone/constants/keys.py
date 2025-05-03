@@ -8,7 +8,7 @@ GIT_CONFIG_CLONE_MODE = f"{_GIT_CONFIG_BASE_SECTION}.clonemode"
 """git config key for clone mode"""
 GIT_CONFIG_LOCK_TIMEOUT = f"{_GIT_CONFIG_BASE_SECTION}.locktimeout"
 """git config key for lock timeout"""
-GIT_CONFIG_METADATA_STORE_MODE = f"{_GIT_CONFIG_BASE_SECTION}.storemode"
+GIT_CONFIG_METADATA_STORE_MODE = f"{_GIT_CONFIG_BASE_SECTION}.metadatastoremode"
 """git config key for metadata store mode"""
 
 _ENV_PREFIX = "GIT_CACHE"
