@@ -5,8 +5,8 @@ from git_cache_clone.errors import GitCacheError
 from git_cache_clone.metadata import collection
 from git_cache_clone.metadata.repo import Record as RepoRecord
 from git_cache_clone.result import Result
+from git_cache_clone.utils.git import normalize_uri
 from git_cache_clone.utils.logging import get_logger
-from git_cache_clone.utils.misc import normalize_git_uri
 
 if TYPE_CHECKING:
     import sqlite3
@@ -51,7 +51,7 @@ class Fetcher:
         from git_cache_clone.metadata.sqlite_store import db, repo
 
         def get_item(conn: "sqlite3.Connection") -> Result[Optional[RepoRecord]]:
-            n_uri = normalize_git_uri(uri)
+            n_uri = normalize_uri(uri)
             return repo.select(conn, n_uri)
 
         return db.locked_operation(self.config, get_item)

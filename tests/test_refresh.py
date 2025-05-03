@@ -81,7 +81,7 @@ def test_attempt_repo_fetch_git_command_failed(tmp_path, mocked_run_git_command)
 
 # endregion _attempt_repo_fetch
 
-# region add_or_refresh
+# region refresh_or_add
 
 
 def test_refresh_or_add_success_refresh(
@@ -136,6 +136,6 @@ def test_refresh_or_add_no_add(
     mocked_clean_up_failed_clone.assert_not_called()
 
 
-# endregion add_or_refresh
+# endregion refresh_or_add
 
 # endregion Unit Tests

@@ -33,7 +33,11 @@ def _attempt_clone_repo(
     pod.dir.mkdir(parents=True, exist_ok=True)
     repo_dir = pod.repo_dir
     if repo_dir.exists():
-        return GitCacheError.repo_already_exists(uri)
+        if git.check_dir_is_a_repo(repo_dir):
+            return GitCacheError.repo_already_exists(uri)
+
+        pod.remove_repo_from_disk()
+        logger.debug("removed invalid repo dir")
 
     logger.debug("adding %s to cache at %s", uri, pod.dir)
 
@@ -102,7 +106,7 @@ def _add_or_refresh_repo(
     """
     pod = Pod.from_uri(config.root_dir, uri)
 
-    if pod.repo_dir.is_dir():
+    if pod.repo_dir.is_dir() and not refresh_if_exists and git.check_dir_is_a_repo(pod.repo_dir):
         return GitCacheError.repo_already_exists(uri)
 
     def action(lock: FileLock) -> Optional[GitCacheError]:
@@ -145,7 +149,7 @@ def _attempt_repo_fetch(pod: Pod, fetch_args: Optional[List[str]]) -> Optional[G
 
     size_kb = int(get_disk_usage(repo_dir) / 1000)
     pruned = "--prune" in fetch_args if fetch_args else False
-    uri = git.get_repo_remote_url(repo_dir)
+    uri = git.get_first_remote_url(repo_dir)
     if uri:
         logger.info("refreshed cache %s", uri)
         metadata.note_fetch_event(uri, size_kb, pruned)
@@ -463,7 +467,7 @@ def _remove_repo_pod_dir(
                 return None
 
             repo_dir = pod.repo_dir
-            uri = git.get_repo_remote_url(repo_dir)
+            uri = git.get_first_remote_url(repo_dir)
             try:
                 pod.remove_from_disk()
             except OSError as ex:

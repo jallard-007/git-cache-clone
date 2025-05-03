@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from git_cache_clone.metadata import repo
+from git_cache_clone.utils.git import normalize_uri
 from git_cache_clone.utils.logging import get_logger
-from git_cache_clone.utils.misc import normalize_git_uri
 
 logger = get_logger(__name__)
 
@@ -26,13 +26,13 @@ _event_store = MemoryEventStore()
 
 
 def note_add_event(uri: str, repo_dir: Path, clone_time_sec: float, disk_usage_kb: int) -> None:
-    n_uri = normalize_git_uri(uri)
+    n_uri = normalize_uri(uri)
     event = repo.AddEvent(repo_dir, clone_time_sec, disk_usage_kb)
     _event_store.append_repo_event(n_uri, event)
 
 
 def note_fetch_event(uri: str, disk_usage_kb: int, pruned: bool) -> None:
-    n_uri = normalize_git_uri(uri)
+    n_uri = normalize_uri(uri)
     event = repo.FetchEvent(disk_usage_kb, pruned)
     _event_store.append_repo_event(n_uri, event)
 
@@ -40,13 +40,13 @@ def note_fetch_event(uri: str, disk_usage_kb: int, pruned: bool) -> None:
 def note_reference_clone_event(
     uri: str, reference_clone_time_sec: float, dependent: Optional[Path]
 ) -> None:
-    n_uri = normalize_git_uri(uri)
+    n_uri = normalize_uri(uri)
     event = repo.UseEvent(reference_clone_time_sec, dependent)
     _event_store.append_repo_event(n_uri, event)
 
 
 def note_remove_event(uri: str) -> None:
-    n_uri = normalize_git_uri(uri)
+    n_uri = normalize_uri(uri)
     event = repo.RemoveEvent()
     _event_store.append_repo_event(n_uri, event)
 
