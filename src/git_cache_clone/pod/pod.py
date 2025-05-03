@@ -14,8 +14,8 @@ class Pod:
         self._pod_dir = pod_dir
 
     @classmethod
-    def from_uri(cls, root_dir: Path, uri: str) -> "Pod":
-        return cls(get_repo_pod_dir(root_dir, uri))
+    def from_uri(cls, root_dir: Path, uri: str, strict: bool = False) -> "Pod":
+        return cls(get_repo_pod_dir(root_dir, uri, strict))
 
     @property
     def dir(self) -> Path:
@@ -81,7 +81,7 @@ def remove_pod_from_disk(repo_pod_dir: Path) -> None:
     logger.debug("removed %s", repo_pod_dir)
 
 
-def get_repo_pod_dir(root_dir: Path, uri: str) -> Path:
+def get_repo_pod_dir(root_dir: Path, uri: str, strict: bool = False) -> Path:
     """Returns the repo pod for a given uri.
 
     Args:
@@ -91,7 +91,7 @@ def get_repo_pod_dir(root_dir: Path, uri: str) -> Path:
     Returns:
         path to repo pod dir.
     """
-    normalized = normalize_uri(uri)
+    normalized = normalize_uri(uri, strict)
     flattened = flatten_uri(normalized)
     return root_dir / filenames.REPOS_DIR / flattened
 

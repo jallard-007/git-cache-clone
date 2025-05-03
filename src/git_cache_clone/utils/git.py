@@ -1,9 +1,10 @@
+import hashlib
 import re
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
-import hashlib
+
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -102,11 +103,6 @@ def get_remote_url(repo_dir: Path, remote_name: str) -> Optional[str]:
     return res.stdout.decode().strip()
 
 
-def is_remote_uri(uri: str) -> bool:
-    parsed = urlparse(uri)
-    return parsed.scheme in {"http", "https", "ssh", "git", "ftp", "ftps", "rsync"}
-
-
 def _normalize_url(url: str) -> str:
     """Normalizes a Git repository URL to a canonical HTTPS form.
 
@@ -139,8 +135,7 @@ def _normalize_url(url: str) -> str:
     return re.sub(r"/+", "/", normalized)
 
 
-def normalize_uri(uri: str) -> str:
-    # Handle SSH-style URL: git@github.com:user/repo.git
+def normalize_uri(uri: str, strict: bool = False) -> str:
     uri = uri.strip()
 
     ssh_match = re.match(r"^git@([^:]+):(.+)", uri)
@@ -148,12 +143,23 @@ def normalize_uri(uri: str) -> str:
         host, path = ssh_match.groups()
         uri = f"https://{host}/{path}"
 
-    if ssh_match or is_remote_uri(uri):
+    parsed = urlparse(uri)
+    if ssh_match or (parsed.scheme and parsed.scheme != "file"):
         return _normalize_url(uri)
 
-    full_path = Path(uri).expanduser().resolve()
-    hash = hashlib.sha1(str(full_path).encode(), usedforsecurity=False).hexdigest()[:10]
-    return f"local-{full_path.name}-{hash}"
+    if not parsed.scheme:
+        if strict:
+            raise ValueError("cloning from a local source must use the file:// syntax")
+
+        # don't modify a uri that we can't handle; it could already be normalized
+        # this is fine for lookup uses, but not for add
+        return uri
+
+    local_uri_path = Path("/") / parsed.netloc / parsed.path.strip("/")
+    full_path = local_uri_path.resolve()
+
+    path_hash = hashlib.sha1(str(full_path).encode(), usedforsecurity=False).hexdigest()[:10]
+    return f"local-{full_path.name}-{path_hash}"
 
 
 def check_dir_is_a_repo(repo_dir: Path) -> bool:

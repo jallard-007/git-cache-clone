@@ -1,8 +1,11 @@
 """get cached repository info"""
 
 import argparse
-from typing import List
+import datetime
+import json
+from typing import List, Optional
 
+from git_cache_clone import metadata
 from git_cache_clone.cli.arguments import CLIArgumentNamespace
 from git_cache_clone.cli.utils import non_empty_string
 from git_cache_clone.config import GitCacheConfig
@@ -25,6 +28,13 @@ def add_parser_arguments(parser: argparse.ArgumentParser) -> None:
         help="get all repos",
     )
     which_group.add_argument("uri", type=non_empty_string, nargs="?")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        dest="output_json",
+        help="output in json format",
+    )
 
 
 def add_subparser(subparsers, parents: List[argparse.ArgumentParser]) -> argparse.ArgumentParser:  # noqa: ANN001
@@ -49,6 +59,58 @@ def setup(subparsers, parents: List[argparse.ArgumentParser]) -> None:  # noqa: 
     add_subparser(subparsers, parents)
 
 
+def convert_size(kb: Optional[int]) -> str:
+    if kb is None:
+        return "null"
+    units = [("TB", 1000**3), ("GB", 1000**2), ("MB", 1000), ("KB", 1)]
+
+    for unit, factor in units:
+        value = kb / factor
+        if value >= 0.1:  # noqa: PLR2004
+            return f"{value:.1f} {unit}"
+
+    return f"{kb} KB"  # fallback, shouldn't be hit since KB is included
+
+
+def utc_datetime_to_local(dt: Optional[datetime.datetime]) -> str:
+    if not dt:
+        return "null"
+    return str(dt.astimezone().replace(tzinfo=None))
+
+
+def display_as_json(repos: List[metadata.RepoRecord]) -> None:
+    as_json = {}
+    for r in repos:
+        as_json_obj = r.to_json_obj()
+        del as_json_obj["normalized_uri"]
+        as_json[r.normalized_uri] = as_json_obj
+
+    print(json.dumps(as_json))
+
+
+def display_information(repos: List[metadata.RepoRecord]) -> None:
+    for repo in repos:
+        clone_time = "null"
+        if repo.clone_time_sec is not None:
+            clone_time = f"{repo.clone_time_sec:.2f} seconds"
+        avg_ref_clone_time = "null"
+        if repo.avg_ref_clone_time_sec is not None:
+            avg_ref_clone_time = f"{repo.avg_ref_clone_time_sec:.2f} seconds"
+
+        print(f"Repository: {repo.normalized_uri}")
+        print(f"  Repo Dir             : {repo.repo_dir or 'null'}")
+        print(f"  Added Date           : {utc_datetime_to_local(repo.added_date)}")
+        print(f"  Removed Date         : {utc_datetime_to_local(repo.removed_date)}")
+        print(f"  Last Fetched Date    : {utc_datetime_to_local(repo.last_fetched_date)}")
+        print(f"  Last Pruned Date     : {utc_datetime_to_local(repo.last_pruned_date)}")
+        print(f"  Last Used Date       : {utc_datetime_to_local(repo.last_used_date)}")
+        print(f"  Times Used           : {repo.num_used or 0}")
+        print(f"  Clone Time           : {clone_time}")
+        print(f"  Avg Ref Clone Time   : {avg_ref_clone_time}")
+        print(f"  Disk Usage           : {convert_size(repo.disk_usage_kb)}")
+        print()
+
+
 def main(
     args: CLIArgumentNamespace,
 ) -> int:
@@ -66,31 +128,36 @@ def main(
     config = GitCacheConfig.from_cli_namespace(args)
     logger.debug(config)
 
-    # TODO
     if args.all:
         result = info_all(config=config)
         if result.is_err():
-            print(result.error)
+            logger.error(result.error)
             return 1
 
         if not result.value:
-            print("nothing in cache")
-            return 0
+            logger.error("nothing in cache")
+            return 1
 
-        for r in result.value:
-            # TODO: format
-            print(r)
+        repo_info = result.value
+    else:
+        if not args.uri:
+            # should never get here as long as arg parse setup is correct
+            raise ValueError
 
-        return 0
+        res = info(config=config, uri=args.uri)
+        if res.is_err():
+            logger.error(res.error)
+            return 1
 
-    if not args.uri:
-        # should never get here as long as arg parse setup is correct
-        raise ValueError
+        if res.value is None:
+            logger.error("not in cache")
+            return 1
 
-    res = info(config=config, uri=args.uri)
-    if res.is_err():
-        logger.error(res.error)
-        return 1
+        repo_info = [res.value]
 
-    print(res.value)
+    if args.output_json:
+        display_as_json(repo_info)
+    else:
+        display_information(repo_info)
+
     return 0

@@ -4,6 +4,7 @@ from typing import Optional
 
 class GitCacheErrorType(enum.Enum):
     INVALID_ARGUMENT = enum.auto()
+    INVALID_REMOTE_URI = enum.auto()
     REPO_ALREADY_EXISTS = enum.auto()
     REPO_NOT_FOUND = enum.auto()
     LOCK_FAILED = enum.auto()
@@ -22,6 +23,10 @@ class GitCacheError:
     @classmethod
     def invalid_argument(cls, reason: str) -> "GitCacheError":
         return cls(GitCacheErrorType.INVALID_ARGUMENT, f"invalid argument: {reason}")
+
+    @classmethod
+    def invalid_remote_uri(cls, reason: str) -> "GitCacheError":
+        return cls(GitCacheErrorType.INVALID_REMOTE_URI, f"invalid remote uri: {reason}")
 
     @classmethod
     def repo_already_exists(cls, uri: str) -> "GitCacheError":

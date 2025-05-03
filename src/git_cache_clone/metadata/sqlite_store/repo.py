@@ -25,7 +25,7 @@ def create_table(conn: sqlite3.Connection) -> None:
         last_fetched_date gc_datetime,
         last_pruned_date gc_datetime,
         last_used_date gc_datetime,
-        total_num_used INTEGER,
+        num_used INTEGER,
         clone_time_sec REAL,
         avg_ref_clone_time_sec REAL,
         disk_usage_kb INTEGER
@@ -59,7 +59,7 @@ def record_to_field_iterable(db_record: Record) -> tuple:
         db_record.last_fetched_date,
         db_record.last_pruned_date,
         db_record.last_used_date,
-        db_record.total_num_used,
+        db_record.num_used,
         db_record.clone_time_sec,
         db_record.avg_ref_clone_time_sec,
         db_record.disk_usage_kb,
@@ -82,7 +82,7 @@ def update(conn: sqlite3.Connection, db_record: Record) -> None:
             f"UPDATE {TABLE_NAME}"
             " SET repo_dir = ?, added_date = ?, removed_date = ?,"
             " last_fetched_date = ?, last_pruned_date = ?,"
-            " last_used_date = ?, total_num_used = ?, clone_time_sec = ?,"
+            " last_used_date = ?, num_used = ?, clone_time_sec = ?,"
             " avg_ref_clone_time_sec = ?, disk_usage_kb = ?"
             " WHERE normalized_uri = ?;"
         ),

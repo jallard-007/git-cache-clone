@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -79,110 +80,117 @@ class GitCacheConfig:
 
 
 def get_root_dir() -> str:
-    git_conf = get_root_dir_from_git_config()
-    if git_conf is not None:
+    def clean_input(val: Optional[str]) -> Optional[str]:
+        if not val:
+            return None
+
+        val = val.strip()
+        if not val:
+            return None
+
+        return val
+
+    env = clean_input(os.environ.get(keys.ENV_ROOT_DIR))
+    if env:
+        return env
+
+    git_conf = clean_input(get_git_config_value(keys.GIT_CONFIG_ROOT_DIR))
+    if git_conf:
         return git_conf
+
     return defaults.ROOT_DIR
 
 
 def get_use_lock() -> bool:
-    git_conf = get_use_lock_from_git_config()
-    if git_conf is not None:
-        return git_conf
+    def clean_input(val: Optional[str]) -> Optional[str]:
+        if not val:
+            return None
+
+        val = val.strip()
+        if not val:
+            return None
+
+        return val
+
+    true_values = {"true", "1", "y", "yes"}
+    env = clean_input(os.environ.get(keys.ENV_USE_LOCK))
+    if env:
+        return env in true_values
+
+    git_conf = clean_input(get_git_config_value(keys.GIT_CONFIG_USE_LOCK))
+    if git_conf:
+        return git_conf in true_values
+
     return defaults.USE_LOCK
 
 
 def get_lock_wait_timeout() -> int:
-    git_conf = get_lock_timeout_from_git_config()
-    if git_conf is not None:
-        return git_conf
+    def clean_input(val: Optional[str]) -> Optional[str]:
+        if not val:
+            return None
+
+        val = val.strip()
+        if not val:
+            return None
+
+        return val
+
+    env = clean_input(os.environ.get(keys.ENV_LOCK_TIMEOUT))
+    if env:
+        try:
+            return int(env)
+        except ValueError:
+            pass
+
+    git_conf = clean_input(get_git_config_value(keys.GIT_CONFIG_LOCK_TIMEOUT))
+    if git_conf:
+        try:
+            return int(git_conf)
+        except ValueError:
+            pass
+
     return defaults.LOCK_TIMEOUT
 
 
 def get_clone_mode() -> CloneMode:
-    return get_clone_mode_from_git_config() or defaults.CLONE_MODE
+    def clean_input(val: Optional[str]) -> Optional[str]:
+        if not val:
+            return None
+
+        val = val.strip()
+        if not val:
+            return None
+
+        return val.lower()
+
+    env = clean_input(os.environ.get(keys.ENV_CLONE_MODE))
+    if env in CLONE_MODES:
+        return env  # type: ignore
+
+    git_conf = clean_input(get_git_config_value(keys.GIT_CONFIG_CLONE_MODE))
+    if git_conf in CLONE_MODES:
+        return git_conf  # type: ignore
+
+    return defaults.CLONE_MODE
 
 
 def get_store_mode() -> MetadataStoreMode:
-    return get_metadata_store_mode_from_git_config() or defaults.METADATA_STORE_MODE
+    def clean_input(val: Optional[str]) -> Optional[str]:
+        if not val:
+            return None
 
+        val = val.strip()
+        if not val:
+            return None
 
-def get_root_dir_from_git_config() -> Optional[str]:
-    """Determines the base path to use.
+        return val.lower()
 
-    Returns:
-        The base path as a string
-    """
-    val = get_git_config_value(keys.GIT_CONFIG_ROOT_DIR)
-    if val and val.strip():
-        return val.strip()
-    return None
+    env = clean_input(os.environ.get(keys.ENV_METADATA_STORE_MODE))
+    if env in METADATA_STORE_MODES:
+        return env  # type: ignore
 
+    git_conf = clean_input(get_git_config_value(keys.GIT_CONFIG_METADATA_STORE_MODE))
+    if git_conf in METADATA_STORE_MODES:
+        return git_conf  # type: ignore
 
-def get_clone_mode_from_git_config() -> Optional[CloneMode]:
-    """Determines the clone mode to use from Git configuration.
-
-    Returns:
-        The clone mode as a string.
-    """
-    key = keys.GIT_CONFIG_CLONE_MODE
-    clone_mode = get_git_config_value(key)
-    if clone_mode:
-        clone_mode = clone_mode.lower().strip()
-        if clone_mode in CLONE_MODES:
-            return clone_mode  # type: ignore
-
-        logger.warning(
-            ("%s %s not one of %s", key, clone_mode, CLONE_MODES),
-        )
-
-    return None
-
-
-def get_use_lock_from_git_config() -> Optional[bool]:
-    """Determines whether locking is disabled from Git configuration.
-
-    Returns:
-        True if locking is disabled, False otherwise.
-    """
-    use_lock = get_git_config_value(keys.GIT_CONFIG_USE_LOCK)
-    if use_lock is None:
-        return None
-    return use_lock.lower().strip() in {"true", "1", "y", "yes"}
-
-
-def get_lock_timeout_from_git_config() -> Optional[int]:
-    """Determines whether locking is disabled from Git configuration.
-
-    Returns:
-        True if locking is disabled, False otherwise.
-    """
-    key = keys.GIT_CONFIG_LOCK_TIMEOUT
-    timeout = get_git_config_value(key)
-    if not timeout:
-        return None
-    try:
-        return int(timeout.strip())
-    except ValueError as ex:
-        logger.warning("%s: %s", key, ex)
-        return None
-
-
-def get_metadata_store_mode_from_git_config() -> Optional[MetadataStoreMode]:
-    """Gets store mode from Git configuration.
-
-    Returns:
-        returns the store mode if a valid one is provide, else None
-    """
-    key = keys.GIT_CONFIG_METADATA_STORE_MODE
-    store_mode = get_git_config_value(key)
-    if store_mode:
-        store_mode = store_mode.lower().strip()
-        if store_mode in METADATA_STORE_MODES:
-            return store_mode  # type: ignore
-
-        logger.warning(
-            ("%s %s not one of %s", key, store_mode, METADATA_STORE_MODES),
-        )
-
-    return None
+    return defaults.METADATA_STORE_MODE

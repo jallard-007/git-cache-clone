@@ -115,6 +115,9 @@ class CLIArgumentNamespace(argparse.Namespace):
     # clone, refresh
     add: bool
 
+    # info
+    output_json: bool
+
     @staticmethod
     def func(args: "CLIArgumentNamespace") -> int:  # type: ignore
         ...

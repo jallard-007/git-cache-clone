@@ -51,13 +51,16 @@ class Applier:
         def action() -> None:
             store_file_path = self.config.root_dir / filenames.METADATA_JSON_DB
             store_file_path.touch(exist_ok=True)
-            with open(store_file_path, "r+") as f:
+            with open(store_file_path, "r") as f:
                 try:
                     json_obj = json.load(f)
                 except json.JSONDecodeError as ex:
                     logger.debug("failed to decode json store %s -- resetting", ex)
                     json_obj = {}
-                apply_repo_events(json_obj, events_dict)
+
+            apply_repo_events(json_obj, events_dict)
+
+            with open(store_file_path, "w") as f:
                 json.dump(json_obj, f)
 
         result: Result[None] = locked_operation(self.config, func=action)
@@ -103,7 +106,7 @@ class Fetcher:
         def get_items() -> List[RepoRecord]:
             try:
                 store_file_path.touch(exist_ok=True)
-                with open(store_file_path, "r+") as f:
+                with open(store_file_path, "r") as f:
                     json_obj = json.load(f)
             except FileNotFoundError:
                 return []
@@ -121,7 +124,7 @@ class Fetcher:
             n_uri = normalize_uri(uri)
             try:
                 store_file_path.touch(exist_ok=True)
-                with open(store_file_path, "r+") as f:
+                with open(store_file_path, "r") as f:
                     json_obj = json.load(f)
             except FileNotFoundError:
                 return None

@@ -6,7 +6,7 @@ from typing import Any
 
 from git_cache_clone.metadata.utils import (
     convert_to_utc_iso_string,
-    parse_utc_iso_to_datetime,
+    parse_utc_iso_to_local_datetime,
 )
 
 
@@ -32,7 +32,7 @@ def adapt_datetime_to_utc_iso(dt: datetime.datetime) -> str:
 
 
 def convert_utc_iso_to_datetime(val: bytes) -> datetime.datetime:
-    return parse_utc_iso_to_datetime(val.decode())
+    return parse_utc_iso_to_local_datetime(val.decode())
 
 
 _adapters_registered = False
