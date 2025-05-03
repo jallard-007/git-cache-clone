@@ -9,8 +9,8 @@ from git_cache_clone.metadata.repo import Event as RepoEvent
 from git_cache_clone.metadata.repo import Record as RepoRecord
 from git_cache_clone.result import Result
 from git_cache_clone.utils.file_lock import FileLock, LockError
+from git_cache_clone.utils.git import normalize_uri
 from git_cache_clone.utils.logging import get_logger
-from git_cache_clone.utils.misc import normalize_git_uri
 
 logger = get_logger(__name__)
 
@@ -118,7 +118,7 @@ class Fetcher:
             return Result(None)
 
         def get_item() -> Optional[RepoRecord]:
-            n_uri = normalize_git_uri(uri)
+            n_uri = normalize_uri(uri)
             try:
                 store_file_path.touch(exist_ok=True)
                 with open(store_file_path, "r+") as f:

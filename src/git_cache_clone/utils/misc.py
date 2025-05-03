@@ -1,61 +1,13 @@
 import os
-import re
 import signal
 from contextlib import contextmanager
 from pathlib import Path
 from types import FrameType
 from typing import Generator, NoReturn, Optional
-from urllib.parse import urlparse, urlunparse
 
 from .logging import get_logger
 
 logger = get_logger(__name__)
-
-
-def normalize_git_uri(uri: str) -> str:
-    """Normalizes a Git repository URI to a canonical HTTPS form.
-
-    Args:
-        uri: The Git repository URI to normalize.
-
-    Returns:
-        The normalized URI as a string.
-
-    Examples:
-        git@github.com:user/repo.git → https://github.com/user/repo
-        https://github.com/User/Repo.git → https://github.com/user/repo
-        git://github.com/user/repo.git → https://github.com/user/repo
-    """
-    uri = uri.strip()
-
-    # Handle SSH-style URL: git@github.com:user/repo.git
-    ssh_match = re.match(r"^git@([^:]+):(.+)", uri)
-    if ssh_match:
-        host, path = ssh_match.groups()
-        uri = f"https://{host}/{path}"
-
-    # Handle git:// protocol → normalize to https
-    if uri.startswith("git://"):
-        uri = "https://" + uri[6:]
-
-    # Parse the URL
-    parsed = urlparse(uri)
-
-    # Remove user info (e.g. username@host)
-    netloc = parsed.hostname or ""
-    if parsed.port:
-        netloc += f":{parsed.port}"
-
-    # Normalize casing for host. path is case sensitive
-    netloc = netloc.lower()
-    path = parsed.path
-
-    # Remove trailing .git, slashes, and redundant slashes
-    path = re.sub(r"/+", "/", path).rstrip("/")
-    if path.endswith(".git"):
-        path = path[:-4]
-
-    return urlunparse(("", netloc, path, "", "", "")).strip("/")
 
 
 def flatten_uri(uri: str) -> str:

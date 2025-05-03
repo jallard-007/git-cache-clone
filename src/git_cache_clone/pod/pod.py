@@ -2,8 +2,9 @@ import shutil
 from pathlib import Path
 
 from git_cache_clone.constants import filenames
+from git_cache_clone.utils.git import normalize_uri
 from git_cache_clone.utils.logging import get_logger
-from git_cache_clone.utils.misc import flatten_uri, normalize_git_uri
+from git_cache_clone.utils.misc import flatten_uri
 
 logger = get_logger(__name__)
 
@@ -43,8 +44,19 @@ class Pod:
     def remove_from_disk(self) -> None:
         remove_pod_from_disk(self.dir)
 
+    def remove_repo_from_disk(self) -> None:
+        remove_pod_repo_from_disk(self.dir)
+
     def mark_used(self) -> None:
         mark_repo_used(self.dir)
+
+
+def remove_pod_repo_from_disk(repo_pod_dir: Path) -> None:
+    repo_dir = repo_pod_dir / filenames.REPO_DIR
+    try:
+        shutil.rmtree(repo_dir)
+    except FileNotFoundError:
+        pass
 
 
 def remove_pod_from_disk(repo_pod_dir: Path) -> None:
@@ -56,16 +68,11 @@ def remove_pod_from_disk(repo_pod_dir: Path) -> None:
     Raises:
         OSError
     """
-    repo_dir = repo_pod_dir / filenames.REPO_DIR
     # This might be unnecessary to do in two calls but if the
     # lock file is deleted first and remade by another process, then in theory
     # there could be a git clone and rmtree operation happening at the same time.
     # remove the git dir first just to be safe
-    try:
-        shutil.rmtree(repo_dir)
-    except FileNotFoundError:
-        pass
-
+    remove_pod_repo_from_disk(repo_pod_dir)
     try:
         shutil.rmtree(repo_pod_dir)
     except FileNotFoundError:
@@ -84,7 +91,7 @@ def get_repo_pod_dir(root_dir: Path, uri: str) -> Path:
     Returns:
         path to repo pod dir.
     """
-    normalized = normalize_git_uri(uri)
+    normalized = normalize_uri(uri)
     flattened = flatten_uri(normalized)
     return root_dir / filenames.REPOS_DIR / flattened
 

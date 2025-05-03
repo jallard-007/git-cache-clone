@@ -1,8 +1,9 @@
+import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional
-
+from urllib.parse import urlparse
+import hashlib
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +31,7 @@ def run_command(
         output = subprocess.PIPE
     else:
         output = None
-    return subprocess.run(git_cmd, check=False, stdout=output)  # noqa: S603
+    return subprocess.run(git_cmd, check=False, stdout=output, stderr=output)  # noqa: S603
 
 
 # Module-level cache
@@ -40,17 +41,17 @@ _git_config_cache: Optional[Dict[str, str]] = None
 def _get_git_config() -> Dict[str, str]:
     global _git_config_cache  # noqa: PLW0603
 
-    if _git_config_cache is None:
-        # Run git config --list and parse into a dictionary
-        try:
-            output = subprocess.check_output(["git", "config", "--list"]).decode()  # noqa: S607 S603
-            _git_config_cache = {}
-            for line in output.strip().split("\n"):
-                if "=" in line:
-                    k, v = line.split("=", 1)
-                    _git_config_cache[k.strip()] = v.strip()
-        except subprocess.CalledProcessError:
-            _git_config_cache = {}
+    if _git_config_cache is not None:
+        return _git_config_cache
+
+    _git_config_cache = {}
+    res = run_command(command="config", command_args=["--list"], capture_output=True)
+    if res.returncode == 0:
+        output = res.stdout.decode()
+        for line in output.strip().split("\n"):
+            if "=" in line:
+                k, v = line.split("=", 1)
+                _git_config_cache[k.strip()] = v.strip()
 
     return _git_config_cache
 
@@ -71,28 +72,90 @@ def get_git_config_value(key: str) -> Optional[str]:
     return get_git_config().get(key)
 
 
-def foo(cmd: List[str]) -> "subprocess.CompletedProcess[bytes]":
-    """Captures output while still printing to stderr"""
-    output: List[bytes] = []
-    with subprocess.Popen(cmd, stdout=sys.stderr, stderr=subprocess.PIPE) as p:  # noqa: S603
-        try:
-            if p.stderr:
-                for line in iter(p.stderr.readline, b""):
-                    output.append(line)
-                    print(line.decode(), end="", file=sys.stderr)
-            p.communicate()
-        except:
-            p.kill()
-            raise
-
-    return subprocess.CompletedProcess(cmd, p.returncode, stdout=None, stderr=b"\n".join(output))
-
-
-def get_repo_remote_url(repo_dir: Path, name: str = "origin") -> Optional[str]:
+def get_first_remote(repo_dir: Path) -> Optional[str]:
     git_args = ["-C", str(repo_dir)]
-    cmd_args = ["get-url", name]
-    res = run_command(git_args, "remote", cmd_args, capture_output=True)
+    res = run_command(git_args, "remote", capture_output=True)
+    if res.returncode != 0 or not res.stdout:
+        return None
+
+    remote_output = res.stdout.decode().strip()
+    try:
+        return remote_output.splitlines()[0]
+    except IndexError:
+        return None
+
+
+def get_first_remote_url(repo_dir: Path) -> Optional[str]:
+    remote_name = get_first_remote(repo_dir)
+    if not remote_name:
+        return None
+    return get_remote_url(repo_dir, remote_name)
+
+
+def get_remote_url(repo_dir: Path, remote_name: str) -> Optional[str]:
+    git_args = ["-C", str(repo_dir)]
+    command_args = ["get-url", remote_name]
+    res = run_command(git_args, "remote", command_args=command_args, capture_output=True)
     if res.returncode != 0 or not res.stdout:
         return None
 
     return res.stdout.decode().strip()
+
+
+def is_remote_uri(uri: str) -> bool:
+    parsed = urlparse(uri)
+    return parsed.scheme in {"http", "https", "ssh", "git", "ftp", "ftps", "rsync"}
+
+
+def _normalize_url(url: str) -> str:
+    """Normalizes a Git repository URL to a canonical HTTPS form.
+
+    Args:
+        url: The Git repository URL to normalize.
+
+    Returns:
+        The normalized URL as a string.
+
+    Examples:
+        git@github.com:user/repo.git → https://github.com/user/repo
+        https://github.com/User/Repo.git → https://github.com/user/repo
+        git://github.com/user/repo.git → https://github.com/user/repo
+    """
+
+    # Parse the URL
+    parsed = urlparse(url)
+
+    host = parsed.hostname
+    if not host:
+        raise ValueError
+
+    host = host.lower()
+    path = parsed.path
+
+    if path.lower().endswith(".git"):
+        path = path[:-4]
+
+    normalized = f"{host}/{path}".strip("/")
+    return re.sub(r"/+", "/", normalized)
+
+
+def normalize_uri(uri: str) -> str:
+    # Handle SSH-style URL: git@github.com:user/repo.git
+    uri = uri.strip()
+
+    ssh_match = re.match(r"^git@([^:]+):(.+)", uri)
+    if ssh_match:
+        host, path = ssh_match.groups()
+        uri = f"https://{host}/{path}"
+
+    if ssh_match or is_remote_uri(uri):
+        return _normalize_url(uri)
+
+    full_path = Path(uri).expanduser().resolve()
+    hash = hashlib.sha1(str(full_path).encode(), usedforsecurity=False).hexdigest()[:10]
+    return f"local-{full_path.name}-{hash}"
+
+
+def check_dir_is_a_repo(repo_dir: Path) -> bool:
+    res = run_command(["-C", str(repo_dir)], "rev-parse", ["--git-dir"], capture_output=True)
+    return res.returncode == 0
