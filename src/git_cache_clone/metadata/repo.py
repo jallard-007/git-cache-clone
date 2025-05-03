@@ -5,8 +5,8 @@ from typing import Optional, Union
 
 from git_cache_clone.metadata.utils import (
     convert_to_utc_iso_string,
-    get_utc_naive_datetime_now,
-    parse_utc_iso_to_datetime,
+    get_datetime_now,
+    parse_utc_iso_to_local_datetime,
 )
 from git_cache_clone.utils.logging import get_logger
 
@@ -23,7 +23,7 @@ class Record:
         last_fetched_date: Optional[datetime.datetime] = None,
         last_pruned_date: Optional[datetime.datetime] = None,
         last_used_date: Optional[datetime.datetime] = None,
-        total_num_used: Optional[int] = None,
+        num_used: Optional[int] = None,
         clone_time_sec: Optional[float] = None,
         avg_ref_clone_time_sec: Optional[float] = None,
         disk_usage_kb: Optional[int] = None,
@@ -39,7 +39,7 @@ class Record:
         self.last_fetched_date = last_fetched_date
         self.last_pruned_date = last_pruned_date
         self.last_used_date = last_used_date
-        self.total_num_used = total_num_used
+        self.num_used = num_used
         self.clone_time_sec = clone_time_sec
         self.avg_ref_clone_time_sec = avg_ref_clone_time_sec
         self.disk_usage_kb = disk_usage_kb
@@ -61,7 +61,7 @@ class Record:
             last_fetched_date=d.get("last_fetched_date"),
             last_pruned_date=d.get("last_pruned_date"),
             last_used_date=d.get("last_used_date"),
-            total_num_used=d.get("total_num_used"),
+            num_used=d.get("num_used"),
             clone_time_sec=d.get("clone_time_sec"),
             avg_ref_clone_time_sec=d.get("avg_ref_clone_time_sec"),
             disk_usage_kb=d.get("disk_usage_kb"),
@@ -82,7 +82,7 @@ class Record:
 
         def datetime_converter(key: str) -> None:
             try:
-                json_obj[key] = parse_utc_iso_to_datetime(json_obj[key])
+                json_obj[key] = parse_utc_iso_to_local_datetime(json_obj[key])
             except KeyError:
                 pass
             except Exception:
@@ -117,7 +117,7 @@ class Record:
 
 class AddEvent:
     def __init__(self, repo_dir: Path, clone_time_sec: float, disk_usage_kb: int) -> None:
-        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.time = get_datetime_now()
         self.repo_dir = repo_dir
         self.clone_time_sec = clone_time_sec
         self.disk_usage_kb = disk_usage_kb
@@ -134,7 +134,7 @@ class AddEvent:
 
 class FetchEvent:
     def __init__(self, disk_usage_kb: int, pruned: bool) -> None:
-        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.time = get_datetime_now()
         self.disk_usage_kb = disk_usage_kb
         self.pruned = pruned
 
@@ -148,34 +148,35 @@ class FetchEvent:
 
 class UseEvent:
     def __init__(self, reference_clone_time_sec: float, dependent: Optional[Path]) -> None:
-        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.time = get_datetime_now()
         self.reference_clone_time_sec = reference_clone_time_sec
         self.dependent = dependent
 
     def apply_to_record(self, record: Record) -> Record:
-        if record.total_num_used is None:
-            record.total_num_used = 0
+        if record.num_used is None:
+            record.num_used = 0
 
         if record.avg_ref_clone_time_sec is None:
             record.avg_ref_clone_time_sec = 0.0
 
         record.last_used_date = self.time
-        record.total_num_used += 1
+        record.num_used += 1
 
         record.avg_ref_clone_time_sec = record.avg_ref_clone_time_sec + (
             self.reference_clone_time_sec - record.avg_ref_clone_time_sec
-        ) / (record.total_num_used)
+        ) / (record.num_used)
 
         return record
 
 
 class RemoveEvent:
     def __init__(self) -> None:
-        self.time: datetime.datetime = get_utc_naive_datetime_now()
+        self.time = get_datetime_now()
 
     def apply_to_record(self, record: Record) -> Record:
+        record.repo_dir = None
         record.removed_date = self.time
-        record.disk_usage_kb = 0
+        record.disk_usage_kb = None
         return record
 
 

@@ -103,12 +103,12 @@ def test_acquire_lock_timeout(tmp_lock_file):
     # Acquire lock in background thread and hold it
     def hold_lock():
         fd = acquire_file_lock(tmp_lock_file, shared=False)
-        threading.Event().wait(0.2)
+        threading.Event().wait(0.1)
         os.close(fd)
 
     t = threading.Thread(target=hold_lock)
     t.start()
-    threading.Event().wait(0.1)  # ensure lock is held
+    threading.Event().wait(0.05)  # ensure lock is held
 
     with pytest.raises(TimeoutError):
         acquire_file_lock(tmp_lock_file, shared=False, timeout=0)

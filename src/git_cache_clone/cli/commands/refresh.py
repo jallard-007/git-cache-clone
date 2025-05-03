@@ -49,6 +49,7 @@ def add_subparser(subparsers, parents: List[argparse.ArgumentParser]) -> argpars
     """
     parser = subparsers.add_parser(
         "refresh",
+        aliases=["fetch"],
         help="refresh cache",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

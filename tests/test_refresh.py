@@ -89,7 +89,7 @@ def test_refresh_or_add_success_refresh(
 ):
     lock = mock.MagicMock()
     mocked_attempt_repo_fetch.return_value = None
-    result = core._refresh_or_add_locked_repo(lock, gc_config, "uri", None, True)
+    result = core._refresh_or_add_locked_repo(lock, gc_config, "file://uri", None, True)
     assert result is None
     mocked_attempt_repo_fetch.assert_called_once()
     mocked_attempt_clone_repo.assert_not_called()
@@ -102,7 +102,7 @@ def test_refresh_or_add_success_add(
     lock = mock.MagicMock()
     mocked_attempt_repo_fetch.return_value.type = GitCacheErrorType.REPO_NOT_FOUND
     mocked_attempt_clone_repo.return_value = None
-    result = core._refresh_or_add_locked_repo(lock, gc_config, "uri", None, True)
+    result = core._refresh_or_add_locked_repo(lock, gc_config, "file://uri", None, True)
     assert result is None
     mocked_attempt_repo_fetch.assert_called_once()
     mocked_attempt_clone_repo.assert_called_once()
@@ -115,7 +115,7 @@ def test_refresh_or_add_cleanup_after_clone_fail(
     lock = mock.MagicMock()
     mocked_attempt_repo_fetch.return_value.type = GitCacheErrorType.REPO_NOT_FOUND
     mocked_attempt_clone_repo.return_value.type = GitCacheErrorType.GIT_COMMAND_FAILED
-    result = core._refresh_or_add_locked_repo(lock, gc_config, "uri", None, True)
+    result = core._refresh_or_add_locked_repo(lock, gc_config, "file://uri", None, True)
     assert result is not None
     assert result.type == GitCacheErrorType.GIT_COMMAND_FAILED
     mocked_attempt_repo_fetch.assert_called_once()
@@ -128,7 +128,7 @@ def test_refresh_or_add_no_add(
 ):
     lock = mock.MagicMock()
     mocked_attempt_repo_fetch.return_value.type = GitCacheErrorType.REPO_NOT_FOUND
-    result = core._refresh_or_add_locked_repo(lock, gc_config, "uri", None, False)
+    result = core._refresh_or_add_locked_repo(lock, gc_config, "file://uri", None, False)
     assert result is not None
     assert result.type == GitCacheErrorType.REPO_NOT_FOUND
     mocked_attempt_repo_fetch.assert_called_once()

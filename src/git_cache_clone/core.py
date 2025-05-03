@@ -30,6 +30,12 @@ def _clean_up_failed_attempt_clone_repo(lock: FileLock, pod: Pod) -> None:
 def _attempt_clone_repo(
     pod: Pod, uri: str, clone_mode: CloneMode, clone_args: Optional[List[str]]
 ) -> Optional[GitCacheError]:
+    try:
+        # validate that the provided uri is ok to use
+        git.normalize_uri(uri, strict=True)
+    except ValueError as ex:
+        return GitCacheError.invalid_remote_uri(str(ex))
+
     pod.dir.mkdir(parents=True, exist_ok=True)
     repo_dir = pod.repo_dir
     if repo_dir.exists():
@@ -538,7 +544,7 @@ def clean_all(
 # region info
 
 
-def info(config: GitCacheConfig, uri: str) -> Result[dict]:
+def info(config: GitCacheConfig, uri: str) -> Result[Optional[metadata.RepoRecord]]:
     if not uri:
         return Result(error=GitCacheError.invalid_argument("missing uri argument"))
 
@@ -551,19 +557,18 @@ def info(config: GitCacheConfig, uri: str) -> Result[dict]:
     if db_record is None:
         return Result(None)
 
-    return Result(db_record.to_dict())
+    return Result(db_record)
 
 
-def info_all(config: GitCacheConfig) -> Result[List[dict]]:
+def info_all(config: GitCacheConfig) -> Result[List[metadata.RepoRecord]]:
     metadata_fetcher = metadata.get_fetcher(config)
     result = metadata_fetcher.get_all_repo_metadata()
     if result.is_err():
         return Result(error=result.error)
 
     db_records = result.value
-    db_records_as_dicts = [r.to_dict() for r in db_records]
 
-    return Result(db_records_as_dicts)
+    return Result(db_records)
 
 
 # endregion info
