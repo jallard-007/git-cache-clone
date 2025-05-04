@@ -13,12 +13,9 @@ class GitCacheErrorType(enum.Enum):
 
 
 class GitCacheError:
-    def __init__(
-        self, error_type: Optional[GitCacheErrorType] = None, msg: Optional[str] = None
-    ) -> None:
+    def __init__(self, error_type: GitCacheErrorType, msg: str) -> None:
         self.type = error_type
         self.msg = msg
-        self.ex: Optional[Exception] = None
 
     @classmethod
     def invalid_argument(cls, reason: str) -> "GitCacheError":
@@ -39,13 +36,8 @@ class GitCacheError:
         return cls(GitCacheErrorType.REPO_NOT_FOUND, msg)
 
     @classmethod
-    def lock_failed(cls, cause: Exception) -> "GitCacheError":
-        obj = cls(
-            GitCacheErrorType.LOCK_FAILED,
-            "could not acquire lock" + (": " + str(cause)),
-        )
-        obj.ex = cause
-        return obj
+    def lock_failed(cls, reason: str) -> "GitCacheError":
+        return cls(GitCacheErrorType.LOCK_FAILED, f"could not acquire lock: {reason}")
 
     @classmethod
     def git_command_failed(cls, msg: Optional[str] = None) -> "GitCacheError":
@@ -59,4 +51,7 @@ class GitCacheError:
         return self.type is not None
 
     def __str__(self) -> str:
-        return self.msg or ""
+        return self.msg or self.type.name
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(type='{self.type}', msg='{self.msg}')"

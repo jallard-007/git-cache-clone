@@ -81,11 +81,12 @@ class FileLock:
         self.retry_count = retry_count
         self.fd: Optional[int] = None
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> "FileLock":
         """
         Acquire the file lock upon entering the context.
         """
         self.acquire()
+        return self
 
     def __exit__(
         self,

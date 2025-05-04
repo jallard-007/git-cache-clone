@@ -310,9 +310,6 @@ def _standard_clone(
 
     res = git.run_command(command="clone", command_args=clone_args)
     if res.returncode != 0:
-        if res.stderr:
-            # print(res.stderr.decode(), end="")
-            pass
         return GitCacheError.git_command_failed()
     return None
 
@@ -405,7 +402,7 @@ def clone(
     refresh_if_exists: bool = False,
     retry_on_fail: bool = False,
 ) -> Optional[GitCacheError]:
-    # can't do everything in the lock as add/fetch are write actions (exclusive lock), but clone is read
+    # can't do everything in one lock as add/fetch are write actions (exclusive lock), but clone is read
     error: Optional[GitCacheError] = None
     if allow_add:
         error = _add_or_refresh_repo(config, uri, None, refresh_if_exists=refresh_if_exists)
@@ -549,26 +546,12 @@ def info(config: GitCacheConfig, uri: str) -> Result[Optional[metadata.RepoRecor
         return Result(error=GitCacheError.invalid_argument("missing uri argument"))
 
     metadata_fetcher = metadata.get_fetcher(config)
-    result = metadata_fetcher.get_repo_metadata(uri)
-    if result.is_err():
-        return Result(error=result.error)
-
-    db_record = result.value
-    if db_record is None:
-        return Result(None)
-
-    return Result(db_record)
+    return metadata_fetcher.get_repo_metadata(uri)
 
 
 def info_all(config: GitCacheConfig) -> Result[List[metadata.RepoRecord]]:
     metadata_fetcher = metadata.get_fetcher(config)
-    result = metadata_fetcher.get_all_repo_metadata()
-    if result.is_err():
-        return Result(error=result.error)
-
-    db_records = result.value
-
-    return Result(db_records)
+    return metadata_fetcher.get_all_repo_metadata()
 
 
 # endregion info
@@ -595,7 +578,7 @@ def _locked_action_none_return(
         lock.create()
         lock.acquire()
     except (LockError, OSError) as ex:
-        return GitCacheError.lock_failed(ex)
+        return GitCacheError.lock_failed(str(ex))
     else:
         return fn(lock)
     finally:
@@ -622,7 +605,7 @@ def _locked_action(
         lock.create()
         lock.acquire()
     except (LockError, OSError) as ex:
-        return Result(error=GitCacheError.lock_failed(ex))
+        return Result(error=GitCacheError.lock_failed(str(ex)))
     else:
         return fn(lock)
     finally:

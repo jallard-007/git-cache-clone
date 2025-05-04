@@ -149,7 +149,7 @@ def locked_operation(
         lock.create()
         lock.acquire()
     except (LockError, OSError) as ex:
-        return Result(error=GitCacheError.lock_failed(ex))
+        return Result(error=GitCacheError.lock_failed(str(ex)))
     else:
         try:
             result = func()
