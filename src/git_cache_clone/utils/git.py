@@ -123,7 +123,7 @@ def _normalize_url(url: str) -> str:
 
     host = parsed.hostname
     if not host:
-        raise ValueError
+        raise ValueError(f"url does not contain a host!: {url}")
 
     host = host.lower()
     path = parsed.path

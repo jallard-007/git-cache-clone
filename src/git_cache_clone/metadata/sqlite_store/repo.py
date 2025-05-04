@@ -97,8 +97,8 @@ def apply_repo_events(
         result = select(conn, normalized_uri)
         if result.is_err():
             logger.error(result.error)
-            # TODO
-            return
+            logger.warning("skipping events for %s due to above error", normalized_uri)
+            continue
 
         db_record = result.value
         if db_record is None:
